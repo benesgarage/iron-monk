@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iron-monk"
+version = "0.1.0"
+description = "A minimalist, strict validation library for Python dataclasses."
+readme = "README.md"
+authors = [
+    {name = "Kai Benevento", email = "benesgarage.dev@gmail.com"}
+]
+license = "MIT"
+requires-python = ">=3.13"
+dependencies = []
+keywords = ["validation", "dataclass", "typing", "strict", "types"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "mypy", "ruff"]
+
+[project.urls]
+Repository = "https://github.com/benesgarage/iron-monk"
+Issues = "https://github.com/benesgarage/iron-monk/issues"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "--cov=monk --cov-report=term-missing"
+
+[tool.ruff]
+line-length = 120
+
+[tool.mypy]
+strict = true
+warn_return_any = true
+warn_unused_configs = true
