@@ -57,6 +57,8 @@ valid_user = validate(User(email="test@domain.com", age=25))
 print(valid_user.email) # "test@domain.com"
 ```
 
+> 💡 Looking for real-world usage? Check out the [examples](examples) directory to see how iron-monk integrates flawlessly with Strawberry GraphQL, Application Configuration, and more!
+
 ## Why iron-monk?
 The Python ecosystem is dominated by heavy validation frameworks. iron-monk is built for a completely different philosophy:
 - 🎯 **Scope**: Do one thing well. Unlike libraries that parse, coerce, and serialize, `iron-monk` focuses *strictly* on validation.
@@ -224,9 +226,9 @@ class IsEven:
             
         try:
             if value % 2 != 0:
-                raise ValueError(f"'{field}' must be an even number.")
+                raise ValueError("Must be an even number.")
         except TypeError:
-            raise TypeError(f"'{field}' must be a number.")
+            raise TypeError("Must be a number.")
 
 # Use it!
 @monk
@@ -250,9 +252,9 @@ class DivisibleBy:
             
         try:
             if value % self.divisor != 0:
-                raise ValueError(f"'{field}' must be divisible by {self.divisor}.")
+                raise ValueError(f"Must be divisible by {self.divisor}.")
         except TypeError:
-            raise TypeError(f"'{field}' must be a number.")
+            raise TypeError("Must be a number.")
 
 # Use it!
 @monk

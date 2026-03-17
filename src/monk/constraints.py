@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 from .protocols import MonkConstraint, SupportsGt, SupportsGe, SupportsLt, SupportsLe, SupportsMod
 from .decorators import constraint
+from .exceptions import ValidationError
 
 
 @constraint
@@ -24,13 +25,11 @@ class Predicate:
         try:
             if not self.func(value):
                 func_name = getattr(self.func, "__name__", "custom predicate")
-                raise ValueError(f"'{field}' failed validation for {func_name}.")
+                raise ValueError(f"Failed validation for {func_name}.")
         except TypeError:
             # Catches cases where a user passes the wrong type to a strict function (e.g. an int to str.islower)
             func_name = getattr(self.func, "__name__", "custom predicate")
-            raise TypeError(
-                f"Type '{type(value).__name__}' is incompatible with predicate '{func_name}' for field '{field}'."
-            )
+            raise TypeError(f"Type '{type(value).__name__}' is incompatible with predicate '{func_name}'.")
 
 
 @constraint
@@ -48,7 +47,7 @@ class Not:
             return  # The inner constraint failed, meaning 'Not' is satisfied!
 
         constraint_name = getattr(type(self.constraint), "__name__", "specified constraint")
-        raise ValueError(f"'{field}' must not satisfy {constraint_name}.")
+        raise ValueError(f"Must not satisfy {constraint_name}.")
 
 
 @constraint(kw_only=True)
@@ -66,17 +65,15 @@ class Interval:
 
         try:
             if self.gt is not None and not (value > self.gt):
-                raise ValueError(f"'{field}' must be strictly greater than {self.gt}.")
+                raise ValueError(f"Must be strictly greater than {self.gt}.")
             if self.ge is not None and not (value >= self.ge):
-                raise ValueError(f"'{field}' must be greater than or equal to {self.ge}.")
+                raise ValueError(f"Must be greater than or equal to {self.ge}.")
             if self.lt is not None and not (value < self.lt):
-                raise ValueError(f"'{field}' must be strictly less than {self.lt}.")
+                raise ValueError(f"Must be strictly less than {self.lt}.")
             if self.le is not None and not (value <= self.le):
-                raise ValueError(f"'{field}' must be less than or equal to {self.le}.")
+                raise ValueError(f"Must be less than or equal to {self.le}.")
         except TypeError:
-            raise TypeError(
-                f"Type '{type(value).__name__}' does not support comparison for interval bounds on field '{field}'."
-            )
+            raise TypeError(f"Type '{type(value).__name__}' does not support comparison for interval bounds.")
 
 
 LowerCase = Predicate(str.islower)
@@ -111,12 +108,12 @@ class Len:
         try:
             length = len(value)
         except TypeError:
-            raise TypeError(f"Type '{type(value).__name__}' does not support len() for field '{field}'.")
+            raise TypeError(f"Type '{type(value).__name__}' does not support len().")
 
         if length < self.min_len:
-            raise ValueError(f"'{field}' must have a minimum length of {self.min_len}.")
+            raise ValueError(f"Must have a minimum length of {self.min_len}.")
         if self.max_len is not None and length > self.max_len:
-            raise ValueError(f"'{field}' must have a maximum length of {self.max_len}.")
+            raise ValueError(f"Must have a maximum length of {self.max_len}.")
 
 
 @constraint
@@ -133,9 +130,9 @@ class MultipleOf:
 
         try:
             if value % self.multiple_of != 0:
-                raise ValueError(f"'{field}' must be a multiple of {self.multiple_of}.")
+                raise ValueError(f"Must be a multiple of {self.multiple_of}.")
         except TypeError:
-            raise TypeError(f"Type '{type(value).__name__}' does not support modulo operation for field '{field}'.")
+            raise TypeError(f"Type '{type(value).__name__}' does not support modulo operation.")
 
 
 @constraint
@@ -155,9 +152,9 @@ class Match:
 
         try:
             if not self._compiled.match(value):
-                raise ValueError(f"'{field}' does not match the required pattern: {self.pattern}")
+                raise ValueError(f"Does not match the required pattern: {self.pattern}")
         except TypeError:
-            raise TypeError(f"Type '{type(value).__name__}' does not support regex matching for field '{field}'.")
+            raise TypeError(f"Type '{type(value).__name__}' does not support regex matching.")
 
 
 @constraint
@@ -180,7 +177,7 @@ class OneOf:
 
         if value not in self.choices:
             allowed = ", ".join(repr(c) for c in self.choices)
-            raise ValueError(f"'{field}' must be one of: [{allowed}], got {repr(value)}.")
+            raise ValueError(f"Must be one of: [{allowed}], got {repr(value)}.")
 
 
 @constraint
@@ -200,12 +197,20 @@ class Each:
             return
 
         if not isinstance(value, Iterable):
-            raise TypeError(f"Type '{type(value).__name__}' is not iterable for field '{field}'.")
+            raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
 
+        errors: list[dict[str, Any]] = []
         for i, item in enumerate(value):
             for c in self.constraints:
-                # Pass down a modified field name (e.g., "tags[2]") so the error points to the exact element
-                c.validate(f"{field}[{i}]", item)
+                try:
+                    c.validate(f"{field}[{i}]", item)
+                except ValidationError as e:
+                    errors.extend(e.errors)
+                except (ValueError, TypeError) as e:
+                    errors.append({"field": f"{field}[{i}]", "message": str(e), "constraint": type(c).__name__})
+
+        if errors:
+            raise ValidationError(errors)
 
 
 @constraint
@@ -220,9 +225,9 @@ class Contains:
 
         try:
             if self.item not in value:
-                raise ValueError(f"'{field}' must contain {repr(self.item)}.")
+                raise ValueError(f"Must contain {repr(self.item)}.")
         except TypeError:
-            raise TypeError(f"Type '{type(value).__name__}' does not support 'in' operator for field '{field}'.")
+            raise TypeError(f"Type '{type(value).__name__}' does not support 'in' operator.")
 
 
 class Unique:
@@ -234,7 +239,7 @@ class Unique:
             return
 
         if not isinstance(value, Iterable):
-            raise TypeError(f"Type '{type(value).__name__}' is not iterable for field '{field}'.")
+            raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
 
         # Convert to a sized collection to safely check length and handle exhaustible iterators
         if not isinstance(value, Sized):
@@ -242,13 +247,13 @@ class Unique:
 
         try:
             if len(set(value)) < len(value):
-                raise ValueError(f"All elements in '{field}' must be unique.")
+                raise ValueError("All elements must be unique.")
         except TypeError:
             # Fallback for unhashable items (e.g. list of lists, list of dicts) O(n^2)
             seen = []
             for item in value:
                 if item in seen:
-                    raise ValueError(f"All elements in '{field}' must be unique.")
+                    raise ValueError("All elements must be unique.")
                 seen.append(item)
 
 
@@ -264,9 +269,9 @@ class Email:
             return
         try:
             if not cls._regex.match(value):
-                raise ValueError(f"'{field}' must be a valid email address.")
+                raise ValueError("Must be a valid email address.")
         except TypeError:
-            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as an email for field '{field}'.")
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as an email.")
 
 
 @constraint
@@ -279,9 +284,9 @@ class StartsWith:
 
         try:
             if not value.startswith(self.prefix):
-                raise ValueError(f"'{field}' must start with '{repr(self.prefix)}'")
+                raise ValueError(f"Must start with '{repr(self.prefix)}'")
         except (TypeError, AttributeError):
-            raise TypeError(f"Type '{type(value).__name__}' does not support startswith() for field '{field}'.")
+            raise TypeError(f"Type '{type(value).__name__}' does not support startswith().")
 
 
 @constraint
@@ -293,9 +298,9 @@ class EndsWith:
             return
         try:
             if not value.endswith(self.suffix):
-                raise ValueError(f"'{field}' must end with '{repr(self.suffix)}'")
+                raise ValueError(f"Must end with '{repr(self.suffix)}'")
         except (TypeError, AttributeError):
-            raise TypeError(f"Type '{type(value).__name__}' does not support endswith() for field '{field}'.")
+            raise TypeError(f"Type '{type(value).__name__}' does not support endswith().")
 
 
 class UUID:
@@ -310,7 +315,7 @@ class UUID:
         try:
             uuid.UUID(str(value))
         except ValueError:
-            raise ValueError(f"'{field}' must be a valid UUID.")
+            raise ValueError("Must be a valid UUID.")
 
 
 class URL:
@@ -323,9 +328,9 @@ class URL:
         try:
             result = urlparse(str(value))
             if not all([result.scheme, result.netloc]):
-                raise ValueError(f"'{field}' must be a valid URL.")
+                raise ValueError("Must be a valid URL.")
         except Exception:
-            raise ValueError(f"'{field}' must be a valid URL.")
+            raise ValueError("Must be a valid URL.")
 
 
 class IPAddress:
@@ -340,4 +345,4 @@ class IPAddress:
         try:
             ipaddress.ip_address(str(value))
         except ValueError:
-            raise ValueError(f"'{field}' must be a valid IPv4 or IPv6 address.")
+            raise ValueError("Must be a valid IPv4 or IPv6 address.")

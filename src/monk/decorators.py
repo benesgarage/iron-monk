@@ -69,6 +69,15 @@ def monk(
         # 1. Convert to a standard dataclass
         d_cls = dataclasses.dataclass(original_cls, **dataclass_kwargs)
 
+        # Hide our internal tracking field from external libraries (like Strawberry or FastAPI)
+        # so they don't expose it in GraphQL/OpenAPI schemas or try to instantiate it.
+        if hasattr(d_cls, "__annotations__"):
+            d_cls.__annotations__.pop("__monk_safe__", None)
+
+        dataclass_fields = getattr(d_cls, "__dataclass_fields__", None)
+        if dataclass_fields is not None:
+            dataclass_fields.pop("__monk_safe__", None)
+
         # 2. Extract metadata from type hints once
         hints = get_type_hints(d_cls, include_extras=True)
         rules = {}
@@ -98,6 +107,7 @@ def monk(
 
         @functools.wraps(orig_init)
         def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
+            kwargs.pop("__monk_safe__", None)  # Shield against aggressive external instantiators
             object.__setattr__(self, "__monk_safe__", False)
             orig_init(self, *args, **kwargs)
 

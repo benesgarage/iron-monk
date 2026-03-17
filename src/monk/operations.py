@@ -37,15 +37,13 @@ def validate(instance: T) -> T:
         for c in constraints:
             try:
                 c.validate(field, value)
+            except ValidationError as e:
+                errors.extend(e.errors)
             except (ValueError, TypeError) as e:
                 errors.append({"field": field, "message": str(e), "constraint": type(c).__name__})
 
     # Recursively validate nested Monk objects
     for field_info in dataclasses.fields(cast(Any, instance)):
-        # Skip our internal tracking field
-        if field_info.name == "__monk_safe__":
-            continue
-
         value = object.__getattribute__(instance, field_info.name)
 
         _recurse(value, field_info.name)

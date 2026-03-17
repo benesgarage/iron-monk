@@ -95,6 +95,13 @@ def test_unique_type_error() -> None:
         Unique.validate("number", 123)
 
 
+def test_unique_generator_conversion() -> None:
+    # Prove that passing an exhaustible generator safely converts to a tuple internally
+    Unique.validate("items", (x for x in [1, 2, 3]))
+    with pytest.raises(ValueError):
+        Unique.validate("items", (x for x in [1, 1]))
+
+
 def test_one_of_constraint_success() -> None:
     constraint = OneOf(["active", "pending", "closed"])
 
@@ -172,10 +179,11 @@ def test_each_constraint_failure() -> None:
         validate(team)
 
     errors = exc.value.errors
-    assert len(errors) == 5
+    assert len(errors) == 6
 
     assert "members" in errors[0]["field"]  # 'al' failed length
-    assert "contact_emails" in errors[1]["field"]  # 'not-email' failed Email
-    assert "matrix" in errors[2]["field"]  # 'B' failed LowerCase in the nested array
-    assert "department" in errors[3]["field"]  # 'engineeri' fails OneOf
-    assert "tags" in errors[4]["field"]  # Does not contain 'core'
+    assert "members" in errors[1]["field"]  # 'Bob' failed LowerCase
+    assert "contact_emails" in errors[2]["field"]  # 'not-email' failed Email
+    assert "matrix" in errors[3]["field"]  # 'B' failed LowerCase in the nested array
+    assert "department" in errors[4]["field"]  # 'engineeri' fails OneOf
+    assert "tags" in errors[5]["field"]  # Does not contain 'core'
