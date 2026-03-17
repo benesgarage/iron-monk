@@ -1,5 +1,5 @@
 import dataclasses
-from typing import TypeVar, Any
+from typing import TypeVar, Any, cast
 from .exceptions import ValidationError
 
 T = TypeVar("T")
@@ -14,9 +14,9 @@ def validate(instance: T) -> T:
         raise TypeError(f"Object of type {type(instance).__name__} is not a valid Monk dataclass.")
 
     errors: list[dict[str, Any]] = []
-    
+
     # Helper function to recursively validate nested Monk objects and bubble up errors
-    def _recurse(val: Any, prefix: str):
+    def _recurse(val: Any, prefix: str) -> None:
         if hasattr(val, "__monk_rules__"):
             try:
                 validate(val)
@@ -30,7 +30,7 @@ def validate(instance: T) -> T:
         elif isinstance(val, dict):
             for k, v in val.items():
                 _recurse(v, f"{prefix}[{repr(k)}]")
-                
+
     rules = getattr(instance, "__monk_rules__", {})
     for field, constraints in rules.items():
         value = object.__getattribute__(instance, field)
@@ -38,20 +38,16 @@ def validate(instance: T) -> T:
             try:
                 c.validate(field, value)
             except (ValueError, TypeError) as e:
-                errors.append({
-                    "field": field,
-                    "message": str(e),
-                    "constraint": type(c).__name__
-                })
-                
+                errors.append({"field": field, "message": str(e), "constraint": type(c).__name__})
+
     # Recursively validate nested Monk objects
-    for field_info in dataclasses.fields(instance):
+    for field_info in dataclasses.fields(cast(Any, instance)):
         # Skip our internal tracking field
         if field_info.name == "__monk_safe__":
             continue
-            
+
         value = object.__getattribute__(instance, field_info.name)
-                    
+
         _recurse(value, field_info.name)
 
     if errors:
@@ -59,5 +55,5 @@ def validate(instance: T) -> T:
 
     # Uncloak the instance
     object.__setattr__(instance, "__monk_safe__", True)
-        
+
     return instance

@@ -17,16 +17,13 @@ class User:
     past_addresses: list[Address]
 
 
-def test_nested_models_success():
+def test_nested_models_success() -> None:
     user = User(
         email="test@domain.com",
         address=Address(zip_code="12345"),
-        past_addresses=[
-            Address(zip_code="54321"),
-            Address(zip_code="98765")
-        ]
+        past_addresses=[Address(zip_code="54321"), Address(zip_code="98765")],
     )
-    
+
     # Prove that the parent AND all the children start guarded/unvalidated!
     with pytest.raises(UnvalidatedAccessError):
         _ = user.email
@@ -34,9 +31,9 @@ def test_nested_models_success():
         _ = user.address.zip_code
     with pytest.raises(UnvalidatedAccessError):
         _ = user.past_addresses[0].zip_code
-        
+
     validated_user = validate(user)
-    
+
     # Accessing fields should no longer raise an exception
     assert validated_user.email == "test@domain.com"
     assert validated_user.address.zip_code == "12345"
@@ -44,22 +41,19 @@ def test_nested_models_success():
     assert validated_user.past_addresses[1].zip_code == "98765"
 
 
-def test_nested_models_failure():
+def test_nested_models_failure() -> None:
     user = User(
         email="bad-email",
         address=Address(zip_code="123"),
-        past_addresses=[
-            Address(zip_code="54321"),
-            Address(zip_code="abcde")
-        ]
+        past_addresses=[Address(zip_code="54321"), Address(zip_code="abcde")],
     )
-    
+
     with pytest.raises(ValidationError) as exc:
         validate(user)
-        
+
     errors = exc.value.errors
     assert len(errors) == 3
-    
+
     # Verify that the recursion accurately prefixed the field paths
     assert errors[0]["field"] == "email"
     assert errors[1]["field"] == "address.zip_code"
@@ -67,6 +61,7 @@ def test_nested_models_failure():
 
 
 # --- Deep Nesting and Optionality Tests ---
+
 
 @monk
 class Config:
@@ -87,30 +82,30 @@ class Cluster:
     server_map: dict[str, Server] | None = None
 
 
-def test_deep_nested_paths_and_optional_models():
+def test_deep_nested_paths_and_optional_models() -> None:
     cluster = Cluster(
         primary=Server(
             config=Config(environment="PROD"),  # Fails LowerCase
-            backup_config=None                  # Prove recursion doesn't crash on None
+            backup_config=None,  # Prove recursion doesn't crash on None
         ),
         secondaries=[
-            Server(config=Config(environment="dev")),     # Passes
-            Server(config=Config(environment="STAGING"))  # Fails LowerCase
+            Server(config=Config(environment="dev")),  # Passes
+            Server(config=Config(environment="STAGING")),  # Fails LowerCase
         ],
         matrix_nodes=[
-            [Server(config=Config(environment="TEST"))]   # Fails LowerCase
+            [Server(config=Config(environment="TEST"))]  # Fails LowerCase
         ],
         server_map={
-            "eu-west": Server(config=Config(environment="PROD")) # Fails LowerCase
-        }
+            "eu-west": Server(config=Config(environment="PROD"))  # Fails LowerCase
+        },
     )
-    
+
     with pytest.raises(ValidationError) as e:
         validate(cluster)
-        
+
     errors = e.value.errors
     assert len(errors) == 4
-    
+
     # Prove the path builder works dynamically for n-levels deep
     assert errors[0]["field"] == "primary.config.environment"
     assert errors[1]["field"] == "secondaries[1].config.environment"
@@ -118,14 +113,11 @@ def test_deep_nested_paths_and_optional_models():
     assert errors[3]["field"] == "server_map['eu-west'].config.environment"
 
 
-def test_optional_nested_models_success():
-    cluster = Cluster(
-        primary=Server(config=None, backup_config=None),
-        secondaries=[]
-    )
-    
+def test_optional_nested_models_success() -> None:
+    cluster = Cluster(primary=Server(config=None, backup_config=None), secondaries=[])
+
     validated = validate(cluster)
-    
+
     # Prove that everything is accessible even when sparse
     assert validated.primary.config is None
     assert validated.secondaries == []

@@ -23,5 +23,4 @@ class SupportsMod(Protocol):
 
 @runtime_checkable
 class MonkConstraint(Protocol):
-    def validate(self, field: str, value: Any) -> None:
-        ...
+    def validate(self, field: str, value: Any) -> None: ...

@@ -1,5 +1,5 @@
 import pytest
-from typing import Annotated
+from typing import Annotated, Any
 from monk import monk, validate
 from monk.exceptions import ValidationError, UnvalidatedAccessError
 from monk.constraints import Email, Not, Match, StartsWith, EndsWith, LowerCase, UpperCase, IsDigit, IsAscii
@@ -26,9 +26,9 @@ from monk.constraints import Email, Not, Match, StartsWith, EndsWith, LowerCase,
         "a.b.c.d.e@example.com",
         "test@123.123.123.123",
         "1@1.1",
-    ]
+    ],
 )
-def test_email_success(valid_email):
+def test_email_success(valid_email: str) -> None:
     # Should execute silently without raising any errors
     Email.validate("email", valid_email)
 
@@ -51,14 +51,14 @@ def test_email_success(valid_email):
         "test@.com",
         "test@example.com\n",
         "user@ñ.com",
-    ]
+    ],
 )
-def test_email_failure(invalid_email):
+def test_email_failure(invalid_email: str) -> None:
     with pytest.raises(ValueError):
         Email.validate("email", invalid_email)
 
 
-def test_email_nullability():
+def test_email_nullability() -> None:
     # Should return silently without validation errors
     Email.validate("email", None)
 
@@ -69,90 +69,92 @@ def test_email_nullability():
         123,
         ["test@example.com"],
         {"email": "test@example.com"},
-    ]
+    ],
 )
-def test_email_type_error(invalid_type):
+def test_email_type_error(invalid_type: Any) -> None:
     with pytest.raises(TypeError):
         Email.validate("email", invalid_type)
 
 
 # --- Raw String Constraints ---
 
-def test_match_constraint():
+
+def test_match_constraint() -> None:
     constraint = Match(r"^PROD-\d+$")
-    
+
     # Success & Nullability
     constraint.validate("sku", "PROD-12345")
     constraint.validate("sku", None)
-    
+
     # Failure
     with pytest.raises(ValueError):
         constraint.validate("sku", "DEV-12345")
-        
+
     # Type Error
     with pytest.raises(TypeError):
         constraint.validate("sku", 12345)
 
 
-def test_startswith_constraint():
+def test_startswith_constraint() -> None:
     constraint = StartsWith("admin_")
-    
+
     # Success & Nullability
     constraint.validate("role", "admin_user")
     constraint.validate("role", None)
-    
+
     # Failure
     with pytest.raises(ValueError):
         constraint.validate("role", "user_admin")
-        
+
     # Type Error
     with pytest.raises(TypeError):
         constraint.validate("role", 123)
 
 
-def test_endswith_constraint():
+def test_endswith_constraint() -> None:
     constraint = EndsWith(".csv")
-    
+
     # Success & Nullability
     constraint.validate("filename", "data.csv")
     constraint.validate("filename", None)
-    
+
     # Failure
     with pytest.raises(ValueError):
         constraint.validate("filename", "data.json")
-        
+
     # Type Error
     with pytest.raises(TypeError):
         constraint.validate("filename", 123)
 
 
-def test_string_predicates():
+def test_string_predicates() -> None:
     # LowerCase
     LowerCase.validate("word", "hello")
     with pytest.raises(ValueError):
         LowerCase.validate("word", "Hello")
-        
+
     # UpperCase
     UpperCase.validate("word", "HELLO")
     with pytest.raises(ValueError):
         UpperCase.validate("word", "Hello")
-        
+
     # IsDigit
     IsDigit.validate("num", "123")
     with pytest.raises(ValueError):
         IsDigit.validate("num", "123a")
-        
+
     # IsAscii
     IsAscii.validate("text", "hello")
     with pytest.raises(ValueError):
         IsAscii.validate("text", "helloñ")
-        
+
     # Type Error catching for predicates
     with pytest.raises(TypeError):
         LowerCase.validate("word", 123)
 
 
 # --- Dataclass Integration Tests ---
+
 
 @monk
 class UserProfile:
@@ -166,7 +168,8 @@ class UserProfile:
     pin_code: Annotated[str, IsDigit]
     bio: Annotated[str, IsAscii]
 
-def test_string_dataclass_lifecycle_success():
+
+def test_string_dataclass_lifecycle_success() -> None:
     profile = UserProfile(
         primary_email="valid@example.com",
         not_an_email="just_a_string",
@@ -189,7 +192,8 @@ def test_string_dataclass_lifecycle_success():
     assert validated_profile.sku == "PROD-12345"
     assert validated_profile.username == "johndoe"
 
-def test_string_dataclass_lifecycle_failure():
+
+def test_string_dataclass_lifecycle_failure() -> None:
     profile = UserProfile(
         primary_email="just_a_string",
         not_an_email="valid@example.com",

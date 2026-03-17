@@ -3,7 +3,9 @@ import os
 
 class MonkSettings:
     """Global configuration settings for iron-monk."""
+
     deferred_validation: bool = True
+
 
 settings = MonkSettings()
 
