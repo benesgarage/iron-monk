@@ -1,5 +1,6 @@
 import dataclasses
 import functools
+import inspect
 from typing import get_type_hints, TypeVar, dataclass_transform, Callable, Any, overload
 from .protocols import MonkConstraint
 from .operations import validate
@@ -54,13 +55,11 @@ def monk(
     """
 
     def wrap(original_cls: type[T]) -> type[T]:
-        # Force evaluation of deferred annotations in Python 3.14+ (PEP 649)
-        _ = getattr(original_cls, "__annotations__", {})
+        # Safely get class annotations (handles Python 3.14+ lazy evaluation)
+        ann = dict(inspect.get_annotations(original_cls))
+        ann["__monk_safe__"] = bool
+        original_cls.__annotations__ = ann
 
-        # Inject internal state as a hidden dataclass field to natively support slots=True
-        if "__annotations__" not in original_cls.__dict__:
-            original_cls.__annotations__ = {}
-        original_cls.__annotations__["__monk_safe__"] = bool
         setattr(
             original_cls,
             "__monk_safe__",
