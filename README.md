@@ -7,7 +7,7 @@
 </div>
 
 
-[![CI/CD](https://img.shields.io/github/actions/workflow/status/benesgarage/iron-monk/ci.yml?branch=main&label=CI&color=black)](https://github.com/benesgarage/iron-monk/actions)
+[![CI/CD](https://img.shields.io/github/actions/workflow/status/benesgarage/iron-monk/ci.yml?branch=main&label=CI)](https://github.com/benesgarage/iron-monk/actions)
 [![PyPI version](https://img.shields.io/pypi/v/iron-monk.svg?color=black)](https://pypi.org/project/iron-monk/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/iron-monk.svg?color=black)](https://pypi.org/project/iron-monk/)
 [![License](https://img.shields.io/github/license/benesgarage/iron-monk?color=black)](https://github.com/benesgarage/iron-monk/blob/main/LICENSE)
