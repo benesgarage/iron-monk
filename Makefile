@@ -6,7 +6,7 @@ help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install the package in editable mode with development dependencies
-	uv pip install -e ".[dev]"
+	python -m pip install -e ".[dev]"
 
 test: ## Run the test suite (coverage is configured in pyproject.toml)
 	pytest
