@@ -11,8 +11,8 @@ install: ## Install the package in editable mode with development dependencies
 test: ## Run the test suite (coverage is configured in pyproject.toml)
 	pytest
 
-cov: ## Run the test suite and generate an interactive HTML coverage report
-	pytest --cov-report=html
+cov: ## Run the test suite and generate a coverage report
+	pytest --cov=monk --cov-report=term-missing
 	@echo "Open htmlcov/index.html in your browser to view the report."
 
 lint: ## Run the Ruff linter

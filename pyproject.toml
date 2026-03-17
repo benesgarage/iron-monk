@@ -31,7 +31,6 @@ Issues = "https://github.com/benesgarage/iron-monk/issues"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-addopts = "--cov=monk --cov-report=term-missing"
 
 [tool.ruff]
 line-length = 120
