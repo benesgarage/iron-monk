@@ -54,6 +54,9 @@ def monk(
     """
 
     def wrap(original_cls: type[T]) -> type[T]:
+        # Force evaluation of deferred annotations in Python 3.14+ (PEP 649)
+        _ = getattr(original_cls, "__annotations__", {})
+
         # Inject internal state as a hidden dataclass field to natively support slots=True
         if "__annotations__" not in original_cls.__dict__:
             original_cls.__annotations__ = {}
