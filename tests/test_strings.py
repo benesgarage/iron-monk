@@ -1,8 +1,21 @@
 import pytest
+import pathlib
 from typing import Annotated, Any
 from monk import monk, validate
 from monk.exceptions import ValidationError, UnvalidatedAccessError
-from monk.constraints import Email, Not, Match, StartsWith, EndsWith, LowerCase, UpperCase, IsDigit, IsAscii
+from monk.constraints import (
+    Email,
+    Not,
+    Match,
+    StartsWith,
+    EndsWith,
+    LowerCase,
+    UpperCase,
+    IsDigit,
+    IsAscii,
+    IsDir,
+    IsFile,
+)
 
 
 @pytest.mark.parametrize(
@@ -151,6 +164,30 @@ def test_string_predicates() -> None:
     # Type Error catching for predicates
     with pytest.raises(TypeError):
         LowerCase.validate("word", 123)
+
+
+# --- Path Constraints ---
+
+
+def test_path_constraints(tmp_path: pathlib.Path) -> None:
+    file_path = tmp_path / "test.txt"
+    file_path.write_text("hello")
+
+    IsDir.validate("dir", tmp_path)
+    IsDir.validate("dir", str(tmp_path))
+    IsDir.validate("dir", None)
+    with pytest.raises(ValueError):
+        IsDir.validate("dir", file_path)
+    with pytest.raises(TypeError):
+        IsDir.validate("dir", 123)
+
+    IsFile.validate("file", file_path)
+    IsFile.validate("file", str(file_path))
+    IsFile.validate("file", None)
+    with pytest.raises(ValueError):
+        IsFile.validate("file", tmp_path)
+    with pytest.raises(TypeError):
+        IsFile.validate("file", 123)
 
 
 # --- Dataclass Integration Tests ---

@@ -3,6 +3,7 @@ import ipaddress
 import math
 import re
 import uuid
+import pathlib
 from collections.abc import Iterable, Sized
 from dataclasses import field
 from typing import Any, Callable, Annotated
@@ -164,9 +165,8 @@ class OneOf:
     choices: Iterable[Any]
 
     def __post_init__(self) -> None:
-        # Convert to tuple for safety if it's an exhaustible iterator
-        if not isinstance(self.choices, (list, set, tuple, frozenset)):
-            object.__setattr__(self, "choices", tuple(self.choices))
+        # Always convert to tuple so the constraint is immutable and hashable (for tyro/FastAPI caching)
+        object.__setattr__(self, "choices", tuple(self.choices))
 
         if not self.choices:
             raise ValueError("OneOf requires at least one choice.")
@@ -346,3 +346,31 @@ class IPAddress:
             ipaddress.ip_address(str(value))
         except ValueError:
             raise ValueError("Must be a valid IPv4 or IPv6 address.")
+
+
+class IsDir:
+    """Validates that a string or Path object points to an existing directory."""
+
+    @classmethod
+    def validate(cls, field: str, value: Any) -> None:
+        if value is None:
+            return
+        try:
+            if not pathlib.Path(value).is_dir():
+                raise ValueError("Must be an existing directory.")
+        except TypeError:
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as a path.")
+
+
+class IsFile:
+    """Validates that a string or Path object points to an existing file."""
+
+    @classmethod
+    def validate(cls, field: str, value: Any) -> None:
+        if value is None:
+            return
+        try:
+            if not pathlib.Path(value).is_file():
+                raise ValueError("Must be an existing file.")
+        except TypeError:
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as a path.")

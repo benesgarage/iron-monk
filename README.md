@@ -56,8 +56,12 @@ except ValidationError as e:
 valid_user = validate(User(email="test@domain.com", age=25))
 print(valid_user.email) # "test@domain.com"
 ```
-
-> 💡 Looking for real-world usage? Check out the [examples](examples) directory to see how iron-monk integrates flawlessly with Strawberry GraphQL, Application Configuration, and more!
+## Real-world examples
+`iron-monk` is designed to drop seamlessly into any modern Python ecosystem. Check out the [examples](examples) directory for production-ready scripts:
+- 🍓 [Strawberry GraphQL](https://github.com/strawberry-graphql/strawberry) [(see examples)](examples/strawberry): Building GraphQL APIs, `iron-monk` helps validate `input` objects seamlessly. 
+- ⚡ [Starlette (ASGI)](https://github.com/Kludex/starlette) [(see example)](examples/starlette_api.py): Building fast HTTP endpoints with simple request validation using `iron-monk`. 
+- 🖥️ [tyro (CLI tool)](https://github.com/brentyi/tyro) [(see examples)](examples/cli_tyro.py): Having great synergy with `iron-monk`, it generates command-line interfaces directly from dataclasses. 
+- ⚙️ [App Configuration](examples/app_config.py): Easily validate app configuration dataclasses using `iron-monk`.
 
 ## Why iron-monk?
 The Python ecosystem is dominated by heavy validation frameworks. iron-monk is built for a completely different philosophy:
@@ -140,9 +144,11 @@ class ServerNode:
 ### Logical & Time
 ```python
 import datetime
+import pathlib
+
 from typing import Annotated
 from monk import monk
-from monk.constraints import Predicate, Not, Email, IsUTC
+from monk.constraints import Predicate, Not, Email, IsUTC, IsFile, IsDir
 
 @monk
 class Event:
@@ -152,6 +158,9 @@ class Event:
     not_an_email: Annotated[str, Not(Email)]
     # Built-in timezone strictness
     created_at: Annotated[datetime.datetime, IsUTC]
+    # For file paths, you can use Path OR str
+    config_file: Annotated[pathlib.Path, IsFile]
+    output_dir: Annotated[str, IsDir]
 ```
 
 ## Advanced Features
