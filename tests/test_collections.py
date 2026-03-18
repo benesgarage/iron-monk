@@ -2,7 +2,7 @@ import pytest
 from typing import Annotated
 from monk import monk, validate
 from monk.exceptions import ValidationError
-from monk.constraints import Each, Len, LowerCase, Email, Unique, Contains, OneOf
+from monk.constraints import Each, Len, LowerCase, Email, Unique, Contains, OneOf, MultipleOf
 
 
 # --- Raw Constraint Tests ---
@@ -69,37 +69,37 @@ def test_contains_type_error() -> None:
 
 
 def test_unique_constraint_success() -> None:
-    Unique.validate("items", [1, 2, 3, 4])
-    Unique.validate("items", ("a", "b", "c"))
-    Unique.validate("items", {1, 2, 3})
-    Unique.validate("items", None)
+    Unique().validate("items", [1, 2, 3, 4])
+    Unique().validate("items", ("a", "b", "c"))
+    Unique().validate("items", {1, 2, 3})
+    Unique().validate("items", None)
 
     # Deeply nested unhashable structures
-    Unique.validate("matrix", [[1, 2], [3, 4]])
-    Unique.validate("deep", [[{"a": [1]}, {"b": [2]}], [{"c": [3]}]])
+    Unique().validate("matrix", [[1, 2], [3, 4]])
+    Unique().validate("deep", [[{"a": [1]}, {"b": [2]}], [{"c": [3]}]])
 
 
 def test_unique_constraint_failure() -> None:
     with pytest.raises(ValueError):
-        Unique.validate("items", [1, 2, 2, 3])
+        Unique().validate("items", [1, 2, 2, 3])
     with pytest.raises(ValueError):
-        Unique.validate("matrix", [[1, 2], [1, 2]])
+        Unique().validate("matrix", [[1, 2], [1, 2]])
     with pytest.raises(ValueError):
-        Unique.validate("deep", [[{"a": [1]}], [{"a": [1]}]])
+        Unique().validate("deep", [[{"a": [1]}], [{"a": [1]}]])
     with pytest.raises(ValueError):
-        Unique.validate("deep", [[1, [2, 3]], [1, [2, 3]]])
+        Unique().validate("deep", [[1, [2, 3]], [1, [2, 3]]])
 
 
 def test_unique_type_error() -> None:
     with pytest.raises(TypeError):
-        Unique.validate("number", 123)
+        Unique().validate("number", 123)
 
 
 def test_unique_generator_conversion() -> None:
     # Prove that passing an exhaustible generator safely converts to a tuple internally
-    Unique.validate("items", (x for x in [1, 2, 3]))
+    Unique().validate("items", (x for x in [1, 2, 3]))
     with pytest.raises(ValueError):
-        Unique.validate("items", (x for x in [1, 1]))
+        Unique().validate("items", (x for x in [1, 1]))
 
 
 def test_one_of_constraint_success() -> None:
@@ -135,6 +135,9 @@ def test_each_init_and_type_failure() -> None:
 
     with pytest.raises(TypeError):
         Each(LowerCase).validate("field", 123)
+
+    with pytest.raises(TypeError, match="missing required arguments"):
+        Each(MultipleOf)
 
 
 # --- Dataclass Integration Tests ---

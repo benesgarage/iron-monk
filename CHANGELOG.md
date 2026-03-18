@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0]
+
+### Added
+- **Custom Error Messages:** All built-in constraints now support an optional `message` argument for completely custom error outputs.
+- **Safe String Interpolation:** Custom messages support safe `{value}` interpolation, as well as accessing constraint properties (e.g., `{ge}`, `{min_len}`).
+- **Nested Interpolation:** The `Not` constraint can now safely interpolate properties from its inner constraint (e.g., `{constraint.ge}`).
+- Added a comprehensive `docs/` directory with detailed tutorials, integration examples, and architectural explanations.
+
+### Changed
+- Refactored all remaining "Singleton" constraints (`Email`, `URL`, `UUID`, etc.) into standard `@constraint` dataclasses to support custom messages and uniform instantiation.
+- The `@constraint` decorator now automatically wraps validation methods to handle custom message interpolation.
+
 ## [0.1.3]
 
 ### Added

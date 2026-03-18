@@ -28,13 +28,34 @@ def constraint(
     """
     kwargs["frozen"] = frozen
     kwargs["slots"] = slots
-    if cls is None:
 
-        def wrapper(c: type[T]) -> type[T]:
-            return dataclasses.dataclass(**kwargs)(c)
+    def wrapper(c: type[T]) -> type[T]:
+        # Intercept the validate method to swap the error message on failure
+        orig_validate = getattr(c, "validate")
 
-        return wrapper
-    return dataclasses.dataclass(**kwargs)(cls)
+        @functools.wraps(orig_validate)
+        def new_validate(self: Any, field: str, value: Any) -> None:
+            try:
+                orig_validate(self, field, value)
+            except ValueError:
+                custom_message = getattr(self, "message", None)
+                if custom_message is not None:
+                    # Safely build formatting context without deep-copying (to avoid crashes on regex/unpicklable objects)
+                    ctx = {"value": value}
+                    if dataclasses.is_dataclass(self):
+                        for f in dataclasses.fields(self):
+                            ctx[f.name] = getattr(self, f.name)
+                    try:
+                        formatted = custom_message.format(**ctx)
+                    except Exception:
+                        formatted = custom_message  # Fallback if string formatting fails
+                    raise ValueError(formatted) from None
+                raise
+
+        setattr(c, "validate", new_validate)
+        return dataclasses.dataclass(**kwargs)(c)
+
+    return wrapper if cls is None else wrapper(cls)
 
 
 @overload

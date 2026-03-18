@@ -6,7 +6,7 @@ import uuid
 import pathlib
 from collections.abc import Iterable, Sized
 from dataclasses import field
-from typing import Any, Callable, Annotated
+from typing import Any, Callable, Annotated, cast
 from urllib.parse import urlparse
 
 from .protocols import MonkConstraint, SupportsGt, SupportsGe, SupportsLt, SupportsLe, SupportsMod
@@ -19,6 +19,7 @@ class Predicate:
     """Validates that a value satisfies a given boolean-returning function."""
 
     func: Callable[..., bool]
+    message: str | None = None
 
     def validate(self, field: str, value: Any) -> None:
         if value is None:
@@ -37,13 +38,23 @@ class Predicate:
 class Not:
     """Inverts the logic of another constraint."""
 
-    constraint: MonkConstraint
+    constraint: MonkConstraint | type[Any]
+    message: str | None = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.constraint, type) and issubclass(self.constraint, MonkConstraint):
+            try:
+                object.__setattr__(self, "constraint", self.constraint())
+            except TypeError as e:
+                raise TypeError(
+                    f"Constraint '{self.constraint.__name__}' missing required arguments. Did you mean {self.constraint.__name__}(...)?"
+                ) from e
 
     def validate(self, field: str, value: Any) -> None:
         if value is None:
             return
         try:
-            self.constraint.validate(field, value)
+            cast(MonkConstraint, self.constraint).validate(field, value)
         except (ValueError, TypeError):
             return  # The inner constraint failed, meaning 'Not' is satisfied!
 
@@ -59,6 +70,7 @@ class Interval:
     ge: SupportsGe | None = None
     lt: SupportsLt | None = None
     le: SupportsLe | None = None
+    message: str | None = None
 
     def validate(self, field: str, value: Any) -> None:
         if value is None:
@@ -94,6 +106,7 @@ IsUTC = Predicate(lambda dt: dt.tzinfo is not None and dt.utcoffset() == datetim
 class Len:
     min_len: Annotated[int, NonNegative] = 0
     max_len: Annotated[int | None, NonNegative] = None
+    message: str | None = None
 
     def __post_init__(self) -> None:
         NonNegative.validate("min_len", self.min_len)
@@ -120,6 +133,7 @@ class Len:
 @constraint
 class MultipleOf:
     multiple_of: SupportsMod
+    message: str | None = None
 
     def __post_init__(self) -> None:
         if self.multiple_of == 0:
@@ -142,6 +156,7 @@ class Match:
 
     pattern: str
     _compiled: re.Pattern[str] = field(init=False, repr=False, compare=False)
+    message: str | None = None
 
     def __post_init__(self) -> None:
         # Compile the regex upfront for maximum performance
@@ -163,6 +178,7 @@ class OneOf:
     """Validates that a value is an exact member of a predefined set of choices."""
 
     choices: Iterable[Any]
+    message: str | None = None
 
     def __post_init__(self) -> None:
         # Always convert to tuple so the constraint is immutable and hashable (for tyro/FastAPI caching)
@@ -186,11 +202,24 @@ class Each:
 
     constraints: tuple[MonkConstraint, ...]
 
-    def __init__(self, *constraints: MonkConstraint):
+    def __init__(self, *constraints: MonkConstraint | type[Any]):
         if not constraints:
             raise ValueError("Each requires at least one constraint.")
+
+        instantiated_constraints: list[MonkConstraint] = []
+        for c in constraints:
+            if isinstance(c, type) and issubclass(c, MonkConstraint):
+                try:
+                    instantiated_constraints.append(c())
+                except TypeError as e:
+                    raise TypeError(
+                        f"Constraint '{c.__name__}' missing required arguments. Did you mean {c.__name__}(...)?"
+                    ) from e
+            else:
+                instantiated_constraints.append(cast(MonkConstraint, c))
+
         # Safely assign to a frozen dataclass
-        object.__setattr__(self, "constraints", constraints)
+        object.__setattr__(self, "constraints", tuple(instantiated_constraints))
 
     def validate(self, field: str, value: Any) -> None:
         if value is None:
@@ -218,6 +247,7 @@ class Contains:
     """Validates that a collection or string contains a specific item/substring."""
 
     item: Any
+    message: str | None = None
 
     def validate(self, field: str, value: Any) -> None:
         if value is None:
@@ -230,11 +260,13 @@ class Contains:
             raise TypeError(f"Type '{type(value).__name__}' does not support 'in' operator.")
 
 
+@constraint
 class Unique:
     """Validates that all elements in a collection are unique."""
 
-    @classmethod
-    def validate(cls, field: str, value: Any) -> None:
+    message: str | None = None
+
+    def validate(self, field: str, value: Any) -> None:
         if value is None:
             return
 
@@ -257,18 +289,20 @@ class Unique:
                 seen.append(item)
 
 
+@constraint
 class Email:
     """Validates an email address using a standard structural regex."""
 
     # A robust, reliable structural regex that catches the vast majority of email typos
     _regex = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+\Z")
 
-    @classmethod
-    def validate(cls, field: str, value: Any) -> None:
+    message: str | None = None
+
+    def validate(self, field: str, value: Any) -> None:
         if value is None:
             return
         try:
-            if not cls._regex.match(value):
+            if not self._regex.match(value):
                 raise ValueError("Must be a valid email address.")
         except TypeError:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as an email.")
@@ -277,6 +311,7 @@ class Email:
 @constraint
 class StartsWith:
     prefix: str
+    message: str | None = None
 
     def validate(self, field: str, value: Any) -> None:
         if value is None:
@@ -292,6 +327,7 @@ class StartsWith:
 @constraint
 class EndsWith:
     suffix: str
+    message: str | None = None
 
     def validate(self, field: str, value: Any) -> None:
         if value is None:
@@ -303,11 +339,13 @@ class EndsWith:
             raise TypeError(f"Type '{type(value).__name__}' does not support endswith().")
 
 
+@constraint
 class UUID:
     """Validates that a value is a valid UUID string or object"""
 
-    @classmethod
-    def validate(cls, field: str, value: Any) -> None:
+    message: str | None = None
+
+    def validate(self, field: str, value: Any) -> None:
         if value is None:
             return
         if isinstance(value, uuid.UUID):
@@ -318,11 +356,13 @@ class UUID:
             raise ValueError("Must be a valid UUID.")
 
 
+@constraint
 class URL:
     """Validates that a string is a properly formatted URL"""
 
-    @classmethod
-    def validate(cls, field: str, value: Any) -> None:
+    message: str | None = None
+
+    def validate(self, field: str, value: Any) -> None:
         if value is None:
             return
         try:
@@ -333,11 +373,13 @@ class URL:
             raise ValueError("Must be a valid URL.")
 
 
+@constraint
 class IPAddress:
     """Validates that a value is a valid IPv4 or IPv6 address"""
 
-    @classmethod
-    def validate(cls, field: str, value: Any) -> None:
+    message: str | None = None
+
+    def validate(self, field: str, value: Any) -> None:
         if value is None:
             return
         if isinstance(value, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
@@ -348,11 +390,13 @@ class IPAddress:
             raise ValueError("Must be a valid IPv4 or IPv6 address.")
 
 
+@constraint
 class IsDir:
     """Validates that a string or Path object points to an existing directory."""
 
-    @classmethod
-    def validate(cls, field: str, value: Any) -> None:
+    message: str | None = None
+
+    def validate(self, field: str, value: Any) -> None:
         if value is None:
             return
         try:
@@ -362,11 +406,13 @@ class IsDir:
             raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as a path.")
 
 
+@constraint
 class IsFile:
     """Validates that a string or Path object points to an existing file."""
 
-    @classmethod
-    def validate(cls, field: str, value: Any) -> None:
+    message: str | None = None
+
+    def validate(self, field: str, value: Any) -> None:
         if value is None:
             return
         try:

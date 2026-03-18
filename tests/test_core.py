@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from monk import monk, validate, settings, constraint
 from monk.exceptions import UnvalidatedAccessError, ValidationError
-from monk.constraints import Not, LowerCase, IsUTC, Email
+from monk.constraints import Not, LowerCase, IsUTC, Email, Interval, MultipleOf
 from monk.protocols import MonkConstraint
 
 
@@ -32,6 +32,10 @@ def test_not_inverter_constraint() -> None:
     # Failure (it IS lowercase, so Not fails)
     with pytest.raises(ValueError):
         constraint.validate("word", "hello")
+
+    # Auto-instantiation failure
+    with pytest.raises(TypeError, match="missing required arguments"):
+        Not(MultipleOf)
 
 
 def test_is_utc_constraint() -> None:
@@ -175,3 +179,28 @@ def test_constraint_auto_instantiation_missing_args() -> None:
         @monk
         class FaultyAgent:
             password: Annotated[str, StatefulConstraint]
+
+
+def test_custom_error_messages() -> None:
+    # 1. Test interpolation of constraint attributes and the bad value
+    age_rule = Interval(ge=18, message="You must be at least {ge} years old. You provided {value}.")
+    with pytest.raises(ValueError, match="You must be at least 18 years old. You provided 15."):
+        age_rule.validate("age", 15)
+
+    # 2. Test fallback when format string has missing keys (prevents crash)
+    bad_rule = Interval(ge=18, message="Missing {unknown_key} and {value}")
+    with pytest.raises(ValueError, match="Missing {unknown_key} and {value}"):
+        bad_rule.validate("age", 15)
+
+    # 3. Test on a standard constraint without parameters
+    email_rule = Email(message="'{value}' is definitely not a corporate email.")
+    with pytest.raises(ValueError, match="'bad-email' is definitely not a corporate email."):
+        email_rule.validate("email", "bad-email")
+
+    # 4. Test nested interpolation (interpolating properties of an inner constraint)
+    nested_rule = Not(
+        Interval(ge=5, le=10),
+        message="You picked {value}, but numbers between {constraint.ge} and {constraint.le} are forbidden!",
+    )
+    with pytest.raises(ValueError, match="You picked 7, but numbers between 5 and 10 are forbidden!"):
+        nested_rule.validate("forbidden_number", 7)

@@ -43,7 +43,7 @@ from monk.constraints import (
 )
 def test_email_success(valid_email: str) -> None:
     # Should execute silently without raising any errors
-    Email.validate("email", valid_email)
+    Email().validate("email", valid_email)
 
 
 @pytest.mark.parametrize(
@@ -68,12 +68,12 @@ def test_email_success(valid_email: str) -> None:
 )
 def test_email_failure(invalid_email: str) -> None:
     with pytest.raises(ValueError):
-        Email.validate("email", invalid_email)
+        Email().validate("email", invalid_email)
 
 
 def test_email_nullability() -> None:
     # Should return silently without validation errors
-    Email.validate("email", None)
+    Email().validate("email", None)
 
 
 @pytest.mark.parametrize(
@@ -86,7 +86,7 @@ def test_email_nullability() -> None:
 )
 def test_email_type_error(invalid_type: Any) -> None:
     with pytest.raises(TypeError):
-        Email.validate("email", invalid_type)
+        Email().validate("email", invalid_type)
 
 
 # --- Raw String Constraints ---
@@ -173,21 +173,21 @@ def test_path_constraints(tmp_path: pathlib.Path) -> None:
     file_path = tmp_path / "test.txt"
     file_path.write_text("hello")
 
-    IsDir.validate("dir", tmp_path)
-    IsDir.validate("dir", str(tmp_path))
-    IsDir.validate("dir", None)
+    IsDir().validate("dir", tmp_path)
+    IsDir().validate("dir", str(tmp_path))
+    IsDir().validate("dir", None)
     with pytest.raises(ValueError):
-        IsDir.validate("dir", file_path)
+        IsDir().validate("dir", file_path)
     with pytest.raises(TypeError):
-        IsDir.validate("dir", 123)
+        IsDir().validate("dir", 123)
 
-    IsFile.validate("file", file_path)
-    IsFile.validate("file", str(file_path))
-    IsFile.validate("file", None)
+    IsFile().validate("file", file_path)
+    IsFile().validate("file", str(file_path))
+    IsFile().validate("file", None)
     with pytest.raises(ValueError):
-        IsFile.validate("file", tmp_path)
+        IsFile().validate("file", tmp_path)
     with pytest.raises(TypeError):
-        IsFile.validate("file", 123)
+        IsFile().validate("file", 123)
 
 
 # --- Dataclass Integration Tests ---
