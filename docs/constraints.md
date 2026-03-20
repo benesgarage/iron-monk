@@ -105,10 +105,6 @@ class NetworkConstraints:
 ```
 
 ## Logic & File System
-- `Predicate(func)`: Validates that a value returns `True` for a given function.
-- `Not(constraint)`: Inverts the logic of another constraint.
-- `IsUTC`: Ensures a `datetime` object is strictly UTC.
-- `IsDir` / `IsFile`: Validates that a string or `pathlib.Path` exists on the filesystem.
 
 ```python
 import datetime

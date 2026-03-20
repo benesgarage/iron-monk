@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iron-monk"
-version = "0.3.0"
+version = "0.3.1"
 description = "A minimalist, strict validation library for Python dataclasses."
 readme = "README.md"
 authors = [
@@ -26,11 +26,12 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "mypy", "ruff", "build"]
+dev = ["pytest", "pytest-cov", "mypy", "ruff", "build", "mkdocs-material"]
 
 [project.urls]
 Repository = "https://github.com/benesgarage/iron-monk"
 Issues = "https://github.com/benesgarage/iron-monk/issues"
+Documentation = "https://benesgarage.github.io/iron-monk/"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

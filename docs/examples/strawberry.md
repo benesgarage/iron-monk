@@ -17,26 +17,14 @@ from monk import monk, validate
 from monk.constraints import Email, Len
 from monk.exceptions import ValidationError
 
-# 1. Create a composite decorator to keep models clean
-def monk_input(cls=None, **kwargs):
-    def wrap(c):
-        return strawberry.input(monk(c), **kwargs)
-    return wrap(cls) if cls is not None else wrap
-
-# 2. Define the input
-@monk_input
-class AddressInput:
-    zip_code: Annotated[str, Len(min_len=5, max_len=5)]
-    routing_matrix: Annotated[list[list[str]], Unique, Each(Each(Len(min_len=3)))]
-
-
-@monk_input
+# 1. Define the input
+@strawberry.input
+@monk
 class RegisterUserInput:
     email: Annotated[str, Email]
     password: Annotated[str, Len(min_len=8)]
-    address: AddressInput
 
-# 3. Define structured Error and Success types (Errors as Data)
+# 2. Define structured Error and Success types (Errors as Data)
 @strawberry.type
 class RegisterSuccess:
     email: str
@@ -49,23 +37,26 @@ class FieldError:
 @strawberry.type
 class BadRequest:
     message: str
-    errors: list[FieldError] | None = None
-
-    @classmethod
-    def from_validation_error(cls, e: ValidationError) -> Self:
-        return cls(
-            message="Input validation failed.",
-            errors=[FieldError(field=to_camel_case(err["field"]), message=err["message"]) for err in e.errors],
-        )
+    errors: list[FieldError]
 
 @strawberry.type
 class Mutation:
+
     @strawberry.mutation
-    def register_user(self, input: RegisterUserInput) -> RegisterSuccess | BadRequest:
+    def register_user(
+        self,
+        input: RegisterUserInput,
+    ) -> RegisterSuccess | BadRequest:
         try:
             valid_input = validate(input)
         except ValidationError as e:
-            return BadRequest.from_validation_error(e)
+            return BadRequest(
+            message="Input validation failed.",
+            errors=[
+                FieldError(field=to_camel_case(err["field"]), message=err["message"])
+                for err in e.errors
+            ],
+        )
 
         return RegisterSuccess(email=valid_input.email)
 
@@ -79,11 +70,7 @@ mutation {
     registerUser(
         input: {
             email: "bad-email",
-            password: "123",
-            address: {
-                zipCode: "12",
-                routingMatrix: [["NW", "South"], ["NW", "South"]]
-            }
+            password: "123"
         }
     ) {
         __typename
@@ -116,22 +103,6 @@ mutation {
         {
           "field": "password",
           "message": "Must have a minimum length of 8."
-        },
-        {
-          "field": "address.zipCode",
-          "message": "Must have a minimum length of 5."
-        },
-        {
-          "field": "address.routingMatrix",
-          "message": "All elements must be unique."
-        },
-        {
-          "field": "address.routingMatrix[0][0]",
-          "message": "Must have a minimum length of 3."
-        },
-        {
-          "field": "address.routingMatrix[1][0]",
-          "message": "Must have a minimum length of 3."
         }
       ]
     }
@@ -140,7 +111,7 @@ mutation {
 ```
 ## 2. Fail-Fast Validation (Context & Headers)
 
-When dealing with authentication headers or IP whitelisting, you *want* the request to crash instantly before the GraphQL engine wastes CPU cycles. Using `deferred_validation=False` turns `iron-monk` into an impenetrable bouncer.
+When dealing with authentication headers or IP whitelisting, you *want* the request to crash instantly before the GraphQL engine wastes CPU cycles. Using `deferred_validation=False` you can achieve this with `iron-monk`.
 
 ```python
 import strawberry
@@ -164,18 +135,13 @@ class Query:
 
 schema = strawberry.Schema(query=Query)
 
-# Simulated ASGI/WSGI Context Builder (e.g., FastAPI, Starlette, Flask)
 def get_context(request_headers: dict, client_ip: str) -> AppContext:
-    """
-    If the headers are bad, the AppContext instantiation will instantly
-    throw a ValidationError, rejecting the HTTP request early!
-    """
+    """If the headers are bad, we throw a ValidationError"""
     return AppContext(
         authorization=request_headers.get("Authorization", ""), 
         client_ip=client_ip
     )
 
-# Invalid Request Example:
 try:
     get_context({"Authorization": "Basic token"}, "192.168.1.100")
 except ValidationError as e:
