@@ -30,13 +30,14 @@ def main():
 
     try:
         # iron-monk strictly validates the instantiated dataclass
-        valid_args = validate(args)        
+        valid_args = validate(args)
     except ValidationError as e:
         print("❌ Invalid arguments provided:\n", file=sys.stderr)
         for err in e.errors:
             print(f"  --{err['field'].replace('_', '-')}: {err['message']}", file=sys.stderr)
-    
+
     print(f"Linting target: {valid_args.target_dir}")
+
 
 if __name__ == "__main__":
     main()

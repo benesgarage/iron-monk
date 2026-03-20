@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from .protocols import MonkConstraint, SupportsGt, SupportsGe, SupportsLt, SupportsLe, SupportsMod
 from .decorators import constraint
 from .exceptions import ValidationError
+from .types import ErrorDict
 
 
 @constraint
@@ -21,7 +22,7 @@ class Predicate:
     func: Callable[..., bool]
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
         try:
@@ -50,11 +51,11 @@ class Not:
                     f"Constraint '{self.constraint.__name__}' missing required arguments. Did you mean {self.constraint.__name__}(...)?"
                 ) from e
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
         try:
-            cast(MonkConstraint, self.constraint).validate(field, value)
+            cast(MonkConstraint, self.constraint).validate(value)
         except (ValueError, TypeError):
             return  # The inner constraint failed, meaning 'Not' is satisfied!
 
@@ -72,17 +73,17 @@ class Interval:
     le: SupportsLe | None = None
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
 
         try:
             if self.gt is not None and not (value > self.gt):
-                raise ValueError(f"Must be strictly greater than {self.gt}.")
+                raise ValueError(f"Must be greater than {self.gt}.")
             if self.ge is not None and not (value >= self.ge):
                 raise ValueError(f"Must be greater than or equal to {self.ge}.")
             if self.lt is not None and not (value < self.lt):
-                raise ValueError(f"Must be strictly less than {self.lt}.")
+                raise ValueError(f"Must be less than {self.lt}.")
             if self.le is not None and not (value <= self.le):
                 raise ValueError(f"Must be less than or equal to {self.le}.")
         except TypeError:
@@ -109,13 +110,13 @@ class Len:
     message: str | None = None
 
     def __post_init__(self) -> None:
-        NonNegative.validate("min_len", self.min_len)
+        NonNegative.validate(self.min_len)
         if self.max_len is not None:
-            NonNegative.validate("max_len", self.max_len)
+            NonNegative.validate(self.max_len)
             if self.min_len > self.max_len:
                 raise ValueError(f"min_len ({self.min_len}) cannot be greater than max_len ({self.max_len}).")
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
 
@@ -139,7 +140,7 @@ class MultipleOf:
         if self.multiple_of == 0:
             raise ValueError("multiple_of cannot be 0.")
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
 
@@ -162,7 +163,7 @@ class Match:
         # Compile the regex upfront for maximum performance
         object.__setattr__(self, "_compiled", re.compile(self.pattern))
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
 
@@ -187,7 +188,7 @@ class OneOf:
         if not self.choices:
             raise ValueError("OneOf requires at least one choice.")
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
 
@@ -221,22 +222,24 @@ class Each:
         # Safely assign to a frozen dataclass
         object.__setattr__(self, "constraints", tuple(instantiated_constraints))
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
 
         if not isinstance(value, Iterable):
             raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
 
-        errors: list[dict[str, Any]] = []
+        errors: list[ErrorDict] = []
         for i, item in enumerate(value):
             for c in self.constraints:
                 try:
-                    c.validate(f"{field}[{i}]", item)
+                    c.validate(item)
                 except ValidationError as e:
-                    errors.extend(e.errors)
+                    for err in e.errors:
+                        err["field"] = f"[{i}]{err.get('field', '')}"
+                        errors.append(err)
                 except (ValueError, TypeError) as e:
-                    errors.append({"field": f"{field}[{i}]", "message": str(e), "constraint": type(c).__name__})
+                    errors.append({"field": f"[{i}]", "message": str(e), "constraint": type(c).__name__})
 
         if errors:
             raise ValidationError(errors)
@@ -249,7 +252,7 @@ class Contains:
     item: Any
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
 
@@ -266,7 +269,7 @@ class Unique:
 
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
 
@@ -298,7 +301,7 @@ class Email:
 
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
         try:
@@ -313,7 +316,7 @@ class StartsWith:
     prefix: str
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
 
@@ -329,7 +332,7 @@ class EndsWith:
     suffix: str
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
         try:
@@ -345,7 +348,7 @@ class UUID:
 
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
         if isinstance(value, uuid.UUID):
@@ -362,7 +365,7 @@ class URL:
 
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
         try:
@@ -379,7 +382,7 @@ class IPAddress:
 
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
         if isinstance(value, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
@@ -396,7 +399,7 @@ class IsDir:
 
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
         try:
@@ -412,7 +415,7 @@ class IsFile:
 
     message: str | None = None
 
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None:
             return
         try:

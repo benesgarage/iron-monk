@@ -27,18 +27,56 @@ except ValidationError as e:
 ### 3. Safe Access
 Once `validate()` succeeds, the object is ready for use. It behaves exactly like a standard, high-performance Python dataclass, and all attributes are safely accessible.
 
+## Handling Errors
+
+When validation fails, `iron-monk` raises a `ValidationError`. This exception contains all the accumulated errors across your dataclass.
+
+You can extract these errors in two ways depending on your use case:
+
+1. Structured Data (`e.errors`): Returns a `list` of `ErrorDict` objects (a `TypedDict` containing `field`, `message`, and `constraint`).
+2. Flattened Strings (`e.flatten()`): Returns a `list` of formatted `{field}: {message}` strings. This is useful for CLI tools, console printouts, or basic application logging.
+
+```python
+from typing import Annotated
+
+from monk import monk, validate
+from monk.constraints import Email, Interval
+from monk.exceptions import ValidationError
+
+@monk
+class User:
+    email: Annotated[str, Email]
+    age: Annotated[int, Interval(ge=18)]
+
+user = User(email="bad-email", age=12)
+
+try: 
+    validate(user)
+except ValidationError as e: 
+    # 1. Structured Data
+    print(e.errors[0]["field"]) # "email"
+    print(e.errors[0]["message"])  # "Must be a valid email address."
+    
+    # 2. Flattened Strings
+    print(e.flatten())
+    # [
+    #   "email: Must be a valid email address.", 
+    #   "age: Must be greater than or equal to 18."
+    # ]
+```
+
 ## Fail-Fast Mode
-By default, `iron-monk` defers validation until you explicitly call `validate(obj)`. If you prefer the traditional "crash on init" behavior of frameworks like Pydantic, you can enable Fail-Fast mode.
+By default, `iron-monk` defers validation until you explicitly call `validate(obj)`. If you prefer the traditional "crash on init" behavior of frameworks like Pydantic, you can disable defer mode.
 
 **1. Globally via Environment Variable:**
 ```sh
-export MONK_DEFERRED_VALIDATION=false
+export MONK_DEFER=false
 ```
 
 **2. Globally via Code:**
 ```python
 from monk import settings
-settings.deferred_validation = False
+settings.defer = False
 ```
 
 **3. Per-Class Override:**
@@ -48,7 +86,7 @@ from typing import  Annotated
 from monk import monk
 from monk.constraints import StartsWith
 
-@monk(deferred_validation=False)
+@monk(defer=False)
 class Headers:
     authorization: Annotated[str, StartsWith("Bearer ")]
 ```
@@ -126,11 +164,11 @@ class Login:
 ## Custom Constraints
 Constraints in `iron-monk` use duck-typing. You do not need to inherit from any base classes.
 
-A valid constraint is just a class with a `validate(self, field: str, value: Any) -> None` method that raises a `ValueError` or `TypeError`.
+A valid constraint is just a class with a `validate(self, value: Any) -> None` method that raises a `ValueError` or `TypeError`.
 
 ```python
 class IsEven:
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None: return
         try:
             if value % 2 != 0:
@@ -152,7 +190,7 @@ from monk import constraint
 class DivisibleBy:
     divisor: int
     # The decorator handles the rest!
-    def validate(self, field: str, value: Any) -> None:
+    def validate(self, value: Any) -> None:
         if value is None: return
         try:
             if value % self.divisor != 0:

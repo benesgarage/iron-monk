@@ -11,9 +11,9 @@ from monk.constraints import URL, OneOf, Interval
 from monk.exceptions import ValidationError
 
 # 1. Define your Configuration Schema
-# We use deferred_validation=False so the app instantly crashes on boot
+# We use defer=False so the app instantly crashes on boot
 # if the environment variables are misconfigured
-@monk(deferred_validation=False)
+@monk(defer=False)
 class AppConfig:
     environment: Annotated[str, OneOf(["development", "staging", "production"])]
     database_url: Annotated[str, URL]

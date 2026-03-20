@@ -111,7 +111,7 @@ mutation {
 ```
 ## 2. Fail-Fast Validation (Context & Headers)
 
-When dealing with authentication headers or IP whitelisting, you *want* the request to crash instantly before the GraphQL engine wastes CPU cycles. Using `deferred_validation=False` you can achieve this with `iron-monk`.
+When dealing with authentication headers or IP whitelisting, you *want* the request to crash instantly before the GraphQL engine wastes CPU cycles. Using `defer=False` you can achieve this with `iron-monk`.
 
 ```python
 import strawberry
@@ -120,7 +120,7 @@ from monk import monk
 from monk.constraints import StartsWith, IPAddress
 from monk.exceptions import ValidationError
 
-@monk(deferred_validation=False)
+@monk(defer=False)
 class AppContext:
     authorization: Annotated[str, StartsWith("Bearer ")]
     client_ip: Annotated[str, IPAddress]

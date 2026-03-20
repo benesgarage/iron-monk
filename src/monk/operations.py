@@ -1,6 +1,7 @@
 import dataclasses
 from typing import TypeVar, Any, cast, Iterable
 from .exceptions import ValidationError
+from .types import ErrorDict
 
 T = TypeVar("T")
 
@@ -13,7 +14,7 @@ def validate(instance: T) -> T:
     if not hasattr(instance, "__monk_rules__"):
         raise TypeError(f"Object of type {type(instance).__name__} is not a valid Monk dataclass.")
 
-    errors: list[dict[str, Any]] = []
+    errors: list[ErrorDict] = []
 
     # Helper function to recursively validate nested Monk objects and bubble up errors
     def _recurse(val: Any, prefix: str) -> None:
@@ -36,9 +37,11 @@ def validate(instance: T) -> T:
         value = object.__getattribute__(instance, field)
         for c in constraints:
             try:
-                c.validate(field, value)
+                c.validate(value)
             except ValidationError as e:
-                errors.extend(e.errors)
+                for err in e.errors:
+                    err["field"] = f"{field}{err.get('field', '')}"
+                    errors.append(err)
             except (ValueError, TypeError) as e:
                 errors.append({"field": field, "message": str(e), "constraint": type(c).__name__})
 

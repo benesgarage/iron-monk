@@ -34,9 +34,9 @@ def constraint(
         orig_validate = getattr(c, "validate")
 
         @functools.wraps(orig_validate)
-        def new_validate(self: Any, field: str, value: Any) -> None:
+        def new_validate(self: Any, value: Any) -> None:
             try:
-                orig_validate(self, field, value)
+                orig_validate(self, value)
             except ValueError:
                 custom_message = getattr(self, "message", None)
                 if custom_message is not None:
@@ -63,12 +63,12 @@ def monk(cls: type[T]) -> type[T]: ...
 
 
 @overload
-def monk(*, deferred_validation: bool | None = None, **dataclass_kwargs: Any) -> Callable[[type[T]], type[T]]: ...
+def monk(*, defer: bool | None = None, **dataclass_kwargs: Any) -> Callable[[type[T]], type[T]]: ...
 
 
 @dataclass_transform()
 def monk(
-    cls: type[T] | None = None, *, deferred_validation: bool | None = None, **dataclass_kwargs: Any
+    cls: type[T] | None = None, *, defer: bool | None = None, **dataclass_kwargs: Any
 ) -> type[T] | Callable[[type[T]], type[T]]:
     """
     The primary decorator for iron-monk.
@@ -133,7 +133,7 @@ def monk(
             orig_init(self, *args, **kwargs)
 
             # Explicit kwarg overrides global config
-            should_defer = deferred_validation if deferred_validation is not None else settings.deferred_validation
+            should_defer = defer if defer is not None else settings.defer
             if not should_defer:
                 validate(self)
 

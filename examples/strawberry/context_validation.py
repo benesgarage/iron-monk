@@ -7,10 +7,10 @@ from monk.exceptions import ValidationError
 
 
 # 1. Define the strictly typed Context.
-# By passing deferred_validation=False, we tell iron-monk to instantly
+# By passing defer=False, we tell iron-monk to instantly
 # crash upon instantiation if the data is bad. This is perfect for
 # security barriers like HTTP headers and authentication.
-@monk(deferred_validation=False)
+@monk(defer=False)
 class AppContext:
     authorization: Annotated[str, StartsWith("Bearer ")]
     client_ip: Annotated[str, IPAddress]

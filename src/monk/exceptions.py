@@ -1,4 +1,4 @@
-from typing import Any
+from .types import ErrorDict
 
 
 class UnvalidatedAccessError(Exception):
@@ -11,18 +11,13 @@ class UnvalidatedAccessError(Exception):
 
 
 class ValidationError(Exception):
-    """
-    Raised when validation fails for one or more fields on a Monk object.
-    Contains a list of all validation errors.
-    """
+    errors: list[ErrorDict]
 
-    def __init__(self, errors: list[dict[str, Any]]):
+    def __init__(self, errors: list[ErrorDict]):
         self.errors = errors
-        error_count = len(errors)
-        plural = "" if error_count == 1 else "s"
+        error_msg = ", ".join(self.flatten())
+        super().__init__(f"Validation failed: {error_msg}")
 
-        lines = [f"{error_count} validation error{plural} found:"]
-        for error in errors:
-            lines.append(f"  - {error['field']}: {error['message']}")
-
-        super().__init__("\n".join(lines))
+    def flatten(self) -> list[str]:
+        """Returns a flat list of formatted error strings."""
+        return [f"{err['field']}: {err['message']}" for err in self.errors]

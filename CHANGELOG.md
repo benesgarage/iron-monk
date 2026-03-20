@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+### Added
+- **Error Formatting Helper:** Added `ValidationError.flatten()`, which returns a flat list of `{field}: {message}` strings. Perfect for CLI printouts or basic application logging.
+- **Exception Messaging:** Unhandled `ValidationError` exceptions now automatically include the flattened error strings directly in their standard Python traceback message.
+- **Strict Error Typing:** Introduced the `ErrorDict` type hint for `e.errors`. This preserves native JSON serialization for web frameworks while giving developers IDE autocomplete for `field`, `message`, and `constraint` keys.
+
+### Changed
+- **Punchier Configuration:** Renamed the `deferred_validation` argument to simply `defer`. This applies to the `@monk(defer=False)` decorator, `settings.defer`, and the `MONK_DEFER` environment variable.
+- **Field-Agnostic Constraints:** Removed the `field: str` parameter from the `validate()` method signature across all constraints. Custom constraints must now implement `validate(self, value: Any) -> None`. This removes framework boilerplate when writing custom rules. Path tracking is now handled implicitly by the core engine.
+
 ## [0.3.1]
 
 ### Fixed
