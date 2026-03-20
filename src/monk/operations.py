@@ -1,5 +1,5 @@
 import dataclasses
-from typing import TypeVar, Any, cast
+from typing import TypeVar, Any, cast, Iterable
 from .exceptions import ValidationError
 
 T = TypeVar("T")
@@ -47,6 +47,47 @@ def validate(instance: T) -> T:
         value = object.__getattribute__(instance, field_info.name)
 
         _recurse(value, field_info.name)
+
+    # Run cross-field validation ONLY if all field-level rules passed
+    if not errors and hasattr(instance, "__monk_validate__"):
+        result = instance.__monk_validate__()
+
+        if result is not None:
+            items: Iterable[Any]
+            # 1. Normalize the output: if it's a single string or single tuple, wrap it in a list
+            if isinstance(result, str) or (
+                isinstance(result, tuple) and len(result) > 0 and isinstance(result[0], str)
+            ):
+                items = [result]
+            elif isinstance(result, Iterable):
+                items = result
+            else:
+                raise TypeError(f"Invalid yield/return from __monk_validate__: {result}. Expected a string or tuple.")
+
+            # 2. Process the items
+            for err in items:
+                if isinstance(err, str):
+                    errors.append({"field": "__root__", "message": err, "constraint": "ModelRule"})
+                elif isinstance(err, tuple):
+                    if not all(isinstance(item, str) for item in err):
+                        raise TypeError(
+                            f"Invalid tuple items from __monk_validate__: {err}. All tuple items must be strings."
+                        )
+
+                    if len(err) == 1:
+                        errors.append({"field": "__root__", "message": err[0], "constraint": "ModelRule"})
+                    elif len(err) == 2:
+                        errors.append({"field": err[0], "message": err[1], "constraint": "ModelRule"})
+                    elif len(err) == 3:
+                        errors.append({"field": err[0], "message": err[1], "constraint": err[2]})
+                    else:
+                        raise TypeError(
+                            f"Invalid tuple length from __monk_validate__: {err}. Expected 1, 2, or 3 items."
+                        )
+                else:
+                    raise TypeError(
+                        f"Invalid item yielded/returned from __monk_validate__: {err}. Expected a string or tuple."
+                    )
 
     if errors:
         raise ValidationError(errors)

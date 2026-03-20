@@ -95,10 +95,13 @@ class ComplexModel:
 > You can see the full list of constraints [here](docs/constraints.md)
 
 ## Advanced Usage
-- **Fail-Fast Mode**: Prefer to fail fast on instatiation? Set fail-fast per class, or globally!
-- **Custom Constraints**: Building your own constraints is stupidly simple thanks to duck-typing. Just write a class with a `validate(self, field, value)` method that raises a `ValueError`. Use our `@constraint` wrapper to automatically get custom error message interpolation!
+`iron-monk` provides powerful tools for complex validation scenarios. Check out the Advanced Usage guide to learn about:
 
-> Want to know more, see [here](docs/advanced.md)!
+- [🔄 **The Lifecycle**](docs/advanced.md#the-lifecycle): Understand the Guarded state of a `monk` object.
+- [⚡ **Fail-Fast Mode**](docs/advanced.md#fail-fast-mode): Prefer to crash instantly? Enable Fail-Fast mode globally or per-class.
+- [💬 **Custom Error Messages**](docs/advanced.md#custom-error-messages): Override default error strings with dynamic interpolation.
+- [🤝 **Cross-Field Validation**](docs/advanced.md#model-level-cross-field-validation): Validate multiple fields together natively.
+- [🛠️ **Custom Constraints**](docs/advanced.md#custom-constraints): Build your own rules using pure duck-typing and standard exceptions.
 
 ## License
 MIT

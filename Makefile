@@ -13,7 +13,6 @@ test: ## Run the test suite (coverage is configured in pyproject.toml)
 
 cov: ## Run the test suite and generate a coverage report
 	pytest --cov=monk --cov-report=term-missing
-	@echo "Open htmlcov/index.html in your browser to view the report."
 
 lint: ## Run the Ruff linter
 	ruff check .

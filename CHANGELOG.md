@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+### Added
+- **Model-Level (Cross-Field) Validation:** Added support for the `__monk_validate__` hook, allowing developers to validate multiple fields together.
+- **Flexible Error Yielding:** The new hook accepts generators, lists, or single returns consisting of strings (for root errors), 2-tuples, or 3-tuples.
+- **Type Aliases:** Exported the `MonkError` type alias to provide IDE autocomplete and type-checking when writing cross-field validation methods.
+
 ## [0.2.0]
 
 ### Added
