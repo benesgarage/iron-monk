@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+### Added
+- **Custom Error Codes:** All built-in constraints now accept an optional `code` argument to override the default class name for enterprise API responses.
+
+### Changed
+- **Error Dictionary Keys:** Renamed the `constraint` key to `code` in the structured error dictionaries (`ErrorDict`) and JSON outputs to better align with enterprise API standards.
+
 ## [0.4.0]
 
 ### Added

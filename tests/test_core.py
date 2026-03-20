@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from monk import monk, validate, settings, constraint
 from monk.exceptions import UnvalidatedAccessError, ValidationError
-from monk.constraints import Not, LowerCase, IsUTC, Email, Interval, MultipleOf
+from monk.constraints import Not, LowerCase, IsUTC, Email, Interval, MultipleOf, Len
 from monk.protocols import MonkConstraint
 
 
@@ -215,3 +215,19 @@ def test_validation_error_flatten() -> None:
         validate(TestModel(age=12))
     except ValidationError as e:
         assert e.flatten() == ["age: Must be greater than or equal to 18."]
+
+
+def test_custom_error_codes() -> None:
+    @monk
+    class ErrorCodeModel:
+        age: Annotated[int, Interval(ge=18)]  # Should default to "Interval"
+        pin: Annotated[str, Len(min_len=4, code="INVALID_PIN")]  # Custom code
+
+    with pytest.raises(ValidationError) as exc:
+        validate(ErrorCodeModel(age=15, pin="12"))
+
+    errors = exc.value.errors
+    assert errors[0]["field"] == "age"
+    assert errors[0]["code"] == "Interval"
+    assert errors[1]["field"] == "pin"
+    assert errors[1]["code"] == "INVALID_PIN"

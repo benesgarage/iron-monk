@@ -43,7 +43,8 @@ def validate(instance: T) -> T:
                     err["field"] = f"{field}{err.get('field', '')}"
                     errors.append(err)
             except (ValueError, TypeError) as e:
-                errors.append({"field": field, "message": str(e), "constraint": type(c).__name__})
+                error_code = getattr(c, "code", None) or type(c).__name__
+                errors.append({"field": field, "message": str(e), "code": error_code})
 
     # Recursively validate nested Monk objects
     for field_info in dataclasses.fields(cast(Any, instance)):
@@ -70,7 +71,7 @@ def validate(instance: T) -> T:
             # 2. Process the items
             for err in items:
                 if isinstance(err, str):
-                    errors.append({"field": "__root__", "message": err, "constraint": "ModelRule"})
+                    errors.append({"field": "__root__", "message": err, "code": "ModelRule"})
                 elif isinstance(err, tuple):
                     if not all(isinstance(item, str) for item in err):
                         raise TypeError(
@@ -78,11 +79,11 @@ def validate(instance: T) -> T:
                         )
 
                     if len(err) == 1:
-                        errors.append({"field": "__root__", "message": err[0], "constraint": "ModelRule"})
+                        errors.append({"field": "__root__", "message": err[0], "code": "ModelRule"})
                     elif len(err) == 2:
-                        errors.append({"field": err[0], "message": err[1], "constraint": "ModelRule"})
+                        errors.append({"field": err[0], "message": err[1], "code": "ModelRule"})
                     elif len(err) == 3:
-                        errors.append({"field": err[0], "message": err[1], "constraint": err[2]})
+                        errors.append({"field": err[0], "message": err[1], "code": err[2]})
                     else:
                         raise TypeError(
                             f"Invalid tuple length from __monk_validate__: {err}. Expected 1, 2, or 3 items."

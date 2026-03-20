@@ -15,7 +15,7 @@ def test_cross_field_return_string() -> None:
 
     with pytest.raises(ValidationError) as exc:
         validate(Model())
-    assert exc.value.errors[0] == {"field": "__root__", "message": "This is a root error.", "constraint": "ModelRule"}
+    assert exc.value.errors[0] == {"field": "__root__", "message": "This is a root error.", "code": "ModelRule"}
 
 
 def test_cross_field_return_tuples() -> None:
@@ -36,15 +36,15 @@ def test_cross_field_return_tuples() -> None:
 
     with pytest.raises(ValidationError) as exc1:
         validate(Model1())
-    assert exc1.value.errors[0] == {"field": "__root__", "message": "Just a message", "constraint": "ModelRule"}
+    assert exc1.value.errors[0] == {"field": "__root__", "message": "Just a message", "code": "ModelRule"}
 
     with pytest.raises(ValidationError) as exc2:
         validate(Model2())
-    assert exc2.value.errors[0] == {"field": "password", "message": "Mismatch", "constraint": "ModelRule"}
+    assert exc2.value.errors[0] == {"field": "password", "message": "Mismatch", "code": "ModelRule"}
 
     with pytest.raises(ValidationError) as exc3:
         validate(Model3())
-    assert exc3.value.errors[0] == {"field": "password", "message": "Mismatch", "constraint": "CustomRule"}
+    assert exc3.value.errors[0] == {"field": "password", "message": "Mismatch", "code": "CustomRule"}
 
 
 def test_cross_field_yield_mixed() -> None:
@@ -60,9 +60,9 @@ def test_cross_field_yield_mixed() -> None:
 
     errors = exc.value.errors
     assert len(errors) == 3
-    assert errors[0] == {"field": "__root__", "message": "Root error", "constraint": "ModelRule"}
-    assert errors[1] == {"field": "password", "message": "Mismatch", "constraint": "ModelRule"}
-    assert errors[2] == {"field": "age", "message": "Too young", "constraint": "AgeRule"}
+    assert errors[0] == {"field": "__root__", "message": "Root error", "code": "ModelRule"}
+    assert errors[1] == {"field": "password", "message": "Mismatch", "code": "ModelRule"}
+    assert errors[2] == {"field": "age", "message": "Too young", "code": "AgeRule"}
 
 
 def test_cross_field_return_list() -> None:
@@ -95,7 +95,7 @@ def test_cross_field_skip_on_field_errors() -> None:
 
     # We only get the field-level error; the cross-field hook was safely skipped!
     assert len(exc.value.errors) == 1
-    assert exc.value.errors[0]["constraint"] == "Interval"
+    assert exc.value.errors[0]["code"] == "Interval"
 
 
 def test_invalid_returns() -> None:

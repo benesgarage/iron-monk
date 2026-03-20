@@ -21,6 +21,7 @@ class Predicate:
 
     func: Callable[..., bool]
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -41,6 +42,7 @@ class Not:
 
     constraint: MonkConstraint | type[Any]
     message: str | None = None
+    code: str | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.constraint, type) and issubclass(self.constraint, MonkConstraint):
@@ -72,6 +74,7 @@ class Interval:
     lt: SupportsLt | None = None
     le: SupportsLe | None = None
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -108,6 +111,7 @@ class Len:
     min_len: Annotated[int, NonNegative] = 0
     max_len: Annotated[int | None, NonNegative] = None
     message: str | None = None
+    code: str | None = None
 
     def __post_init__(self) -> None:
         NonNegative.validate(self.min_len)
@@ -135,6 +139,7 @@ class Len:
 class MultipleOf:
     multiple_of: SupportsMod
     message: str | None = None
+    code: str | None = None
 
     def __post_init__(self) -> None:
         if self.multiple_of == 0:
@@ -158,6 +163,7 @@ class Match:
     pattern: str
     _compiled: re.Pattern[str] = field(init=False, repr=False, compare=False)
     message: str | None = None
+    code: str | None = None
 
     def __post_init__(self) -> None:
         # Compile the regex upfront for maximum performance
@@ -180,6 +186,7 @@ class OneOf:
 
     choices: Iterable[Any]
     message: str | None = None
+    code: str | None = None
 
     def __post_init__(self) -> None:
         # Always convert to tuple so the constraint is immutable and hashable (for tyro/FastAPI caching)
@@ -239,7 +246,8 @@ class Each:
                         err["field"] = f"[{i}]{err.get('field', '')}"
                         errors.append(err)
                 except (ValueError, TypeError) as e:
-                    errors.append({"field": f"[{i}]", "message": str(e), "constraint": type(c).__name__})
+                    error_code = getattr(c, "code", None) or type(c).__name__
+                    errors.append({"field": f"[{i}]", "message": str(e), "code": error_code})
 
         if errors:
             raise ValidationError(errors)
@@ -251,6 +259,7 @@ class Contains:
 
     item: Any
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -268,6 +277,7 @@ class Unique:
     """Validates that all elements in a collection are unique."""
 
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -300,6 +310,7 @@ class Email:
     _regex = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+\Z")
 
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -315,6 +326,7 @@ class Email:
 class StartsWith:
     prefix: str
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -331,6 +343,7 @@ class StartsWith:
 class EndsWith:
     suffix: str
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -347,6 +360,7 @@ class UUID:
     """Validates that a value is a valid UUID string or object"""
 
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -364,6 +378,7 @@ class URL:
     """Validates that a string is a properly formatted URL"""
 
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -381,6 +396,7 @@ class IPAddress:
     """Validates that a value is a valid IPv4 or IPv6 address"""
 
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -398,6 +414,7 @@ class IsDir:
     """Validates that a string or Path object points to an existing directory."""
 
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:
@@ -414,6 +431,7 @@ class IsFile:
     """Validates that a string or Path object points to an existing file."""
 
     message: str | None = None
+    code: str | None = None
 
     def validate(self, value: Any) -> None:
         if value is None:

@@ -33,7 +33,7 @@ When validation fails, `iron-monk` raises a `ValidationError`. This exception co
 
 You can extract these errors in two ways depending on your use case:
 
-1. Structured Data (`e.errors`): Returns a `list` of `ErrorDict` objects (a `TypedDict` containing `field`, `message`, and `constraint`).
+1. Structured Data (`e.errors`): Returns a `list` of `ErrorDict` objects (a `TypedDict` containing `field`, `message`, and `code`).
 2. Flattened Strings (`e.flatten()`): Returns a `list` of formatted `{field}: {message}` strings. This is useful for CLI tools, console printouts, or basic application logging.
 
 ```python
@@ -118,6 +118,30 @@ class Registration:
         )
     ]
 ```
+
+## Custom Error Codes
+
+By default, the code field in the `ErrorDict` evaluates to the exact name of the constraint class that failed (e.g., "Interval" or "Email").
+
+Many APIs often need to return specific, machine-readable error codes so frontend apps can map them to translation dictionaries or specific UI states. Every built-in constraint supports an optional code argument to override this behavior.
+```python
+from typing import Annotated
+
+from monk import monk
+from monk.constraints import Interval, Len
+
+@monk
+class Registration:
+    # 1. Will return code: "Interval"
+    score: Annotated[int, Interval(ge=0)]
+
+    # 2. Will return code: "USER_UNDERAGE"
+    age: Annotated[int, Interval(ge=18, code="USER_UNDERAGE")]
+    
+    # 3. Will return code: "INVALID_PIN"
+    pin: Annotated[str, Len(min_len=4, code="INVALID_PIN")]
+```
+
 
 ## Cross-Field Validation
 Sometimes a validation rule depends on multiple fields at once (e.g., `password` must equal `password_confirm`, or `end_date` must be after `start_date`).
