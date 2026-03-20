@@ -17,9 +17,16 @@
 
 ## Installation
 
+Install via your preferred package manager:
+
 ```bash
+# Using pip
 pip install iron-monk
+
+# Using uv
 uv add iron-monk
+
+# Using poetry
 poetry add iron-monk
 ```
 
