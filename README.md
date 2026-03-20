@@ -86,7 +86,7 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
 ## The Toolkit
 **Batteries included**. `iron-monk` comes with a comprehensive suite of built-in constraints. From networking (`Email`, `URL`, `IPAddress`) to collections (`Each`, `Unique`) and logic (`Not`, `Predicate`), you will rarely need to write your own rules.
 
-👉 [**Check out the Constraint Toolkit**Explore the Constraint Toolkit &rarr;**](https://benesgarage.github.io/iron-monk/constraints/)
+👉 [**Check out the Constraint Toolkit &rarr;**](https://benesgarage.github.io/iron-monk/constraints/)
 
 ## Advanced Usage
 Need to validate multiple fields together, override error messages with string interpolation, or instantly crash on bad data? `iron-monk` supports complex business logic while maintaining zero magic.
