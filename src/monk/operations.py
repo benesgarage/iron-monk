@@ -1,10 +1,47 @@
 import dataclasses
-from typing import TypeVar, Any, cast, Iterable
+import functools
+from typing import TypeVar, Any, cast, Iterable, get_origin, get_args, get_type_hints
 from .exceptions import ValidationError
 from .types import ErrorDict
 from .config import settings
+from .protocols import MonkConstraint
 
 T = TypeVar("T")
+
+
+def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, list[MonkConstraint]]:
+    """Extracts validation rules from type hints."""
+    rules: dict[str, list[MonkConstraint]] = {}
+
+    for name, hint in hints.items():
+        # Look for our specific MonkConstraint in Annotated metadata
+        metadata = getattr(hint, "__metadata__", [])
+
+        # Support framework wrappers (like SQLAlchemy's Mapped[Annotated[...]])
+        if not metadata:
+            args = get_args(hint)
+            origin = get_origin(hint)
+            # Only unwrap if it's not a standard collection (collections use Each constraint)
+            if args and origin not in (list, set, frozenset, tuple, dict):
+                metadata = getattr(args[0], "__metadata__", [])
+
+        field_rules = []
+        for m in metadata:
+            # Auto-instantiate classes that implement the protocol but were passed as a type
+            if isinstance(m, type) and issubclass(m, MonkConstraint):
+                try:
+                    field_rules.append(m())
+                except TypeError as e:
+                    raise TypeError(
+                        f"Constraint '{m.__name__}' missing required arguments. Did you mean {m.__name__}(...)?"
+                    ) from e
+            elif isinstance(m, MonkConstraint):
+                field_rules.append(m)
+
+        if field_rules:
+            rules[name] = field_rules
+
+    return rules
 
 
 def _is_nullable(c: Any) -> bool:
@@ -90,6 +127,29 @@ def validate_return(value: Any, constraints: list[Any]) -> None:
 
     if errors:
         raise ValidationError(errors)
+
+
+@functools.lru_cache(maxsize=None)
+def _get_schema_rules(schema: type) -> dict[str, list[MonkConstraint]]:
+    """Caches the extracted rules for a given TypedDict schema to maximize performance."""
+    hints = get_type_hints(schema, include_extras=True)
+    return _extract_monk_metadata(hints)
+
+
+def validate_dict(data: dict[str, Any], schema: type) -> dict[str, Any]:
+    """Validates a raw dictionary against a TypedDict schema without instantiating an object."""
+    rules = _get_schema_rules(schema)
+    errors: list[ErrorDict] = []
+
+    # We iterate over the SCHEMA rules to catch missing required fields
+    for field_name, constraints in rules.items():
+        value = data.get(field_name)
+        _validate_field_and_recurse(field_name, value, constraints, errors)
+
+    if errors:
+        raise ValidationError(errors)
+
+    return data
 
 
 def validate(instance: T) -> T:

@@ -1,5 +1,57 @@
 # Advanced Usage
 
+## Raw Dictionary Validation
+
+While dataclasses are incredibly ergonomic, instantiating objects takes memory and time. If you are building high-throughput data pipelines or WebSocket servers, you might want to skip object creation entirely.
+
+`iron-monk` allows you to validate raw Python dictionaries directly against a `TypedDict` schema using the `validate_dict` function. This skips the object allocation phase entirely, offering near-native performance while retaining the full power of the constraint engine.
+
+```python
+from typing import TypedDict, Annotated
+
+from monk import validate_dict
+from monk.constraints import Email, Interval
+from monk.exceptions import ValidationError
+
+# 1. Define your schema using TypedDict (No @monk decorator needed)
+class UserDict(TypedDict):
+    email: Annotated[str, Email]
+    age: Annotated[int, Interval(ge=18)]
+    
+# 2. Receive a raw dictionary from your framework (e.g., json.loads)
+raw_payload = {"email": "bad-email", "age": 12}
+
+# 3. Validate it instantly without creating an object
+try:
+    safe_dict = validate_dict(raw_payload, UserDict)
+except ValidationError as e:
+    print(e.flatten())
+    # ['email: Must be a valid email address.', 'age: Must be greater than or equal to 18.']
+```
+
+## Direct Execution (Standalone Variables)
+
+Sometimes you don't need a full Data Transfer Object, a function decorator, or a dictionary schema. You might just have a single variable in the middle of a script that you want to quickly verify.
+
+Because `iron-monk` constraints are just standard Python classes, you can instantiate them and call `.validate(value)` directly. 
+
+> **⚡ Note:** When executing constraints directly, they do **not** raise a `ValidationError` (since there is no object to aggregate multiple errors for). Instead, they raise standard Python `ValueError` or `TypeError` exceptions!
+
+```python
+from monk.constraints import Email, Interval
+
+# 1. Success (Returns silently)
+Email().validate("test@domain.com")
+
+# 2. Failure (Raises ValueError)
+Interval(ge=18).validate(12) 
+# ValueError: Must be greater than or equal to 18.
+
+# 3. Type Error (Raises TypeError)
+Email().validate(123) 
+# TypeError: Type 'int' cannot be validated as an email.
+```
+
 ## Custom Error Messages
 Every built-in constraint supports an optional `message` argument. `iron-monk` uses string formatting to allow you to dynamically inject the invalid `{value}` or constraint parameters.
 

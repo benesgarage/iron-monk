@@ -36,34 +36,54 @@ poetry add iron-monk
 
 ## Quickstart
 
-Define your models using the `@monk` decorator and wrap your types in `Annotated` constraints.
+`iron-monk` provides four ways to validate your data using standard Python type hints and explicit constraints.
 
 ```python
-from typing import Annotated
-from monk import monk, validate
+from typing import Annotated, TypedDict
+from monk import monk, validate, validate_dict
 from monk.constraints import Email, Interval
-from monk.exceptions import ValidationError
 
+# 1. Dataclasses (Deferred Validation or Fail-Fast)
 @monk
 class User:
     email: Annotated[str, Email]
     age: Annotated[int, Interval(ge=18)]
 
 user = User(email="bad-email", age=12)
+validate(user) # ❌ Raises ValidationError
 
-print(user.email) # Raises UnvalidatedAccessError
+# 2. Functions (Instant Validation)
+@monk
+def send_invite(email: Annotated[str, Email]):
+    print(f"Sending to {email}")
+
+send_invite("bad-email") # ❌ Raises ValidationError instantly
+
+# 3. Raw Dictionaries (Zero-Instantiation Validation)
+class UserDict(TypedDict):
+    email: Annotated[str, Email]
+
+validate_dict({"email": "bad-email"}, UserDict) # ❌ Raises ValidationError
+
+# 4. Direct Execution (Standalone Variables)
+Email().validate("bad-email") # ❌ Raises standard ValueError instantly
+```
+
+When validation fails, `iron-monk` aggregates all errors so you can easily return structured JSON payloads to your frontend:
+```python
+from monk import validate
+from monk.exceptions import ValidationError
 
 try:
     validate(user)
 except ValidationError as e:
-    print(e.errors) # [{'field': 'email', 'message': "..."}, {'field': 'age', 'message': "..."}]
-
-user.email = "test@domain.com"
-user.age = 25
-
-validate(user)
-
-print(user.email) # "test@domain.com"
+    # Get a list of dictionaries for your JSON response
+    print(e.errors) 
+    # [{'field': 'email', 'message': 'Must be a valid email address.', 'code': 'Email'}, ...]
+    
+    # Or get a flat list of strings for quick logging
+    print(e.flatten()) 
+    # ['email: Must be a valid email address.', 'age: Must be greater than or equal to 18.']
 ```
 
 ## Core Philosophy

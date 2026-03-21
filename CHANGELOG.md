@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0]
+
+### Added
+- **Raw Dictionary Validation:** Added the `validate_dict(data, schema)` function to natively validate raw Python dictionaries against `TypedDict` schemas. This provides performance benefits for high-throughput applications (like WebSockets or data pipelines) by entirely skipping object instantiation and memory allocation while retaining the full constraint toolkit
+
 ## [0.8.0]
 
 ### Added

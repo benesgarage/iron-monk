@@ -15,7 +15,7 @@ cov: ## Run the test suite and generate a coverage report
 	pytest --cov=monk --cov-report=term-missing
 
 lint: ## Run the Ruff linter
-	ruff check .
+	ruff check --fix .
 
 format: ## Run the Ruff formatter
 	ruff format .

@@ -8,55 +8,17 @@ from typing import (
     Callable,
     Any,
     overload,
-    get_origin,
-    get_args,
     ParamSpec,
     cast,
 )
 
-from .protocols import MonkConstraint
-from .operations import validate, validate_arguments, validate_return
+from .operations import validate, validate_arguments, validate_return, _extract_monk_metadata
 from .config import settings
 from .exceptions import UnvalidatedAccessError
 
 T = TypeVar("T")
 P = ParamSpec("P")
 R = TypeVar("R")
-
-
-def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, list[MonkConstraint]]:
-    """Extracts validation rules from type hints."""
-    rules: dict[str, list[MonkConstraint]] = {}
-
-    for name, hint in hints.items():
-        # Look for our specific MonkConstraint in Annotated metadata
-        metadata = getattr(hint, "__metadata__", [])
-
-        # Support framework wrappers (like SQLAlchemy's Mapped[Annotated[...]])
-        if not metadata:
-            args = get_args(hint)
-            origin = get_origin(hint)
-            # Only unwrap if it's not a standard collection (collections use Each constraint)
-            if args and origin not in (list, set, frozenset, tuple, dict):
-                metadata = getattr(args[0], "__metadata__", [])
-
-        field_rules = []
-        for m in metadata:
-            # Auto-instantiate classes that implement the protocol but were passed as a type
-            if isinstance(m, type) and issubclass(m, MonkConstraint):
-                try:
-                    field_rules.append(m())
-                except TypeError as e:
-                    raise TypeError(
-                        f"Constraint '{m.__name__}' missing required arguments. Did you mean {m.__name__}(...)?"
-                    ) from e
-            elif isinstance(m, MonkConstraint):
-                field_rules.append(m)
-
-        if field_rules:
-            rules[name] = field_rules
-
-    return rules
 
 
 @overload
