@@ -1,14 +1,65 @@
 import dataclasses
 import functools
 import inspect
-from typing import get_type_hints, TypeVar, dataclass_transform, Callable, Any, overload, get_origin, get_args
+from typing import (
+    get_type_hints,
+    TypeVar,
+    dataclass_transform,
+    Callable,
+    Any,
+    overload,
+    get_origin,
+    get_args,
+    ParamSpec,
+    cast,
+)
 
 from .protocols import MonkConstraint
-from .operations import validate
+from .operations import validate, validate_arguments
 from .config import settings
 from .exceptions import UnvalidatedAccessError
 
 T = TypeVar("T")
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, list[MonkConstraint]]:
+    """Extracts validation rules from type hints."""
+    rules: dict[str, list[MonkConstraint]] = {}
+
+    for name, hint in hints.items():
+        if name == "return":
+            continue
+
+        # Look for our specific MonkConstraint in Annotated metadata
+        metadata = getattr(hint, "__metadata__", [])
+
+        # Support framework wrappers (like SQLAlchemy's Mapped[Annotated[...]])
+        if not metadata:
+            args = get_args(hint)
+            origin = get_origin(hint)
+            # Only unwrap if it's not a standard collection (collections use Each constraint)
+            if args and origin not in (list, set, frozenset, tuple, dict):
+                metadata = getattr(args[0], "__metadata__", [])
+
+        field_rules = []
+        for m in metadata:
+            # Auto-instantiate classes that implement the protocol but were passed as a type
+            if isinstance(m, type) and issubclass(m, MonkConstraint):
+                try:
+                    field_rules.append(m())
+                except TypeError as e:
+                    raise TypeError(
+                        f"Constraint '{m.__name__}' missing required arguments. Did you mean {m.__name__}(...)?"
+                    ) from e
+            elif isinstance(m, MonkConstraint):
+                field_rules.append(m)
+
+        if field_rules:
+            rules[name] = field_rules
+
+    return rules
 
 
 @overload
@@ -60,23 +111,25 @@ def constraint(
 
 
 @overload
-def monk(cls: type[T]) -> type[T]: ...
+def monk(obj: type[T]) -> type[T]: ...
 
 
 @overload
 def monk(*, defer: bool | None = None, **dataclass_kwargs: Any) -> Callable[[type[T]], type[T]]: ...
 
 
+@overload
+def monk(obj: Callable[P, R]) -> Callable[P, R]: ...
+
+
 @dataclass_transform()
-def monk(
-    cls: type[T] | None = None, *, defer: bool | None = None, **dataclass_kwargs: Any
-) -> type[T] | Callable[[type[T]], type[T]]:
+def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any) -> Any:
     """
     The primary decorator for iron-monk.
-    Transforms a class into a validated, guarded dataclass.
+    Transforms a class into a validated, guarded dataclass, OR validates function arguments.
     """
 
-    def wrap(original_cls: type[T]) -> type[T]:
+    def _wrap_class(original_cls: type[T]) -> type[T]:
         # Safely get class annotations (handles Python 3.14+ lazy evaluation)
         ann = dict(inspect.get_annotations(original_cls))
         ann["__monk_safe__"] = bool
@@ -115,34 +168,7 @@ def monk(
 
         # 2. Extract metadata from type hints once
         hints = get_type_hints(d_cls, include_extras=True)
-        rules = {}
-        for name, hint in hints.items():
-            # Look for our specific MonkConstraint in Annotated metadata
-            metadata = getattr(hint, "__metadata__", [])
-
-            # Support framework wrappers (like SQLAlchemy's Mapped[Annotated[...]])
-            if not metadata:
-                args = get_args(hint)
-                origin = get_origin(hint)
-                # Only unwrap if it's not a standard collection (collections use Each constraint)
-                if args and origin not in (list, set, frozenset, tuple, dict):
-                    metadata = getattr(args[0], "__metadata__", [])
-
-            field_rules = []
-            for m in metadata:
-                # Auto-instantiate classes that implement the protocol but were passed as a type
-                if isinstance(m, type) and issubclass(m, MonkConstraint):
-                    try:
-                        field_rules.append(m())
-                    except TypeError as e:
-                        raise TypeError(
-                            f"Constraint '{m.__name__}' missing required arguments. Did you mean {m.__name__}(...)?"
-                        ) from e
-                elif isinstance(m, MonkConstraint):
-                    field_rules.append(m)
-
-            if field_rules:
-                rules[name] = field_rules
+        rules = _extract_monk_metadata(hints)
 
         setattr(d_cls, "__monk_rules__", rules)
 
@@ -170,4 +196,37 @@ def monk(
 
         return d_cls
 
-    return wrap if cls is None else wrap(cls)
+    def _wrap_function(func: Callable[P, R]) -> Callable[P, R]:
+        hints = get_type_hints(func, include_extras=True)
+        rules = _extract_monk_metadata(hints)
+        sig = inspect.signature(func)
+
+        if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                bound = sig.bind(*args, **kwargs)
+                bound.apply_defaults()
+                validate_arguments(bound.arguments, rules)
+                return await func(*args, **kwargs)  # type: ignore
+
+            return cast(Callable[P, R], async_wrapper)
+        else:
+
+            @functools.wraps(func)
+            def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+                bound = sig.bind(*args, **kwargs)
+                bound.apply_defaults()
+                validate_arguments(bound.arguments, rules)
+                return func(*args, **kwargs)
+
+            return sync_wrapper
+
+    def router(target: Any) -> Any:
+        if inspect.isclass(target):
+            return _wrap_class(target)
+        elif inspect.isroutine(target):
+            return _wrap_function(target)
+        raise TypeError("Monk can only decorate classes or functions.")
+
+    return router if obj is None else router(obj)

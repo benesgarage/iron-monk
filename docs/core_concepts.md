@@ -146,3 +146,47 @@ from monk.constraints import StartsWith
 class Headers:
     authorization: Annotated[str, StartsWith("Bearer ")]
 ```
+
+## Function and Method Validation
+
+While `iron-monk` is heavily tailored for validating Data Transfer Objects (DTOs), the `@monk` decorator is actually a dual-purpose tool.
+
+You can apply it directly to any standard Python function or method to natively validate its incoming arguments.
+It reads your `Annotated` constraints, validates the passed arguments, and aggregates failures into a standard `ValidationError` before the function executes.
+
+> **⚡ Note:** Unlike dataclasses, function validation is **always instantaneous (fail-fast)**. There is no deferred state; if the arguments violate your constraints, the function will immediately raise an error and will not run.
+
+```python
+from typing import Annotated
+
+from monk import monk
+from monk.constraints import Email, Interval
+from monk.exceptions import ValidationError
+
+@monk
+def send_invite(email: Annotated[str, Email], age: Annotated[int, Interval(ge=18)]):
+    print(f"Sending invite to {email}")
+
+try:
+    send_invite(email="bad-email", age=12)
+except ValidationError as e:
+    print(e.flatten())
+    # ['email: Must be a valid email address.', 'age: Must be greater than or equal to 18.']
+```
+
+It also fully supports asynchronous functions and all standard Object-Oriented methods (instance methods, class methods, and static methods). Just make sure `@monk` is the innermost decorator (placed directly above the function definition)
+
+```python
+from monk.constraints import Each, IPAddress
+
+class NotificationService:
+    @classmethod
+    @monk
+    def broadcast(cls, emails: Annotated[list[str], Each(Email)]):
+        pass
+        
+    @staticmethod
+    @monk
+    async def ping(ip: Annotated[str, IPAddress]):
+        pass
+```

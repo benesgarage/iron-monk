@@ -326,3 +326,8 @@ def test_framework_wrapper_unwrapping() -> None:
         validate(WrappedModel(email="bad-email"))  # type: ignore
 
     assert exc.value.errors[0]["code"] == "Email"
+
+
+def test_invalid_monk_target() -> None:
+    with pytest.raises(TypeError, match="Monk can only decorate classes or functions."):
+        monk(123)  # type: ignore

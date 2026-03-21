@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0]
+
+### Added
+- **Function and Method Validation:** The `@monk` decorator is now dual-purpose! It can be applied directly to standard Python functions (sync and async), as well as class methods (`@classmethod`, `@staticmethod`, and instance methods). It intercepts calls, validates incoming arguments against your `Annotated` constraints, and aggregates failures into a standard `ValidationError` before the routine executes.
+
 ## [0.6.1]
 
 ### Fixed
