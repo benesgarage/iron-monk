@@ -63,6 +63,84 @@ class Not:
 
 
 @constraint
+class AnyOf:
+    """Validates that a value satisfies at least one of the given constraints."""
+
+    constraints: tuple[MonkConstraint, ...] = field(init=False, repr=False, compare=False)
+    message: str | None = field(default=None, kw_only=True)
+    code: str | None = field(default=None, kw_only=True)
+
+    def __init__(self, *constraints: MonkConstraint | type[Any], message: str | None = None, code: str | None = None):
+        if not constraints:
+            raise ValueError("AnyOf requires at least one constraint.")
+
+        instantiated_constraints: list[MonkConstraint] = []
+        for c in constraints:
+            if isinstance(c, type) and issubclass(c, MonkConstraint):
+                try:
+                    instantiated_constraints.append(c())
+                except TypeError as e:
+                    raise TypeError(
+                        f"Constraint '{c.__name__}' missing required arguments. Did you mean {c.__name__}(...)?"
+                    ) from e
+            else:
+                instantiated_constraints.append(cast(MonkConstraint, c))
+
+        object.__setattr__(self, "constraints", tuple(instantiated_constraints))
+        object.__setattr__(self, "message", message)
+        object.__setattr__(self, "code", code)
+
+    def validate(self, value: Any) -> None:
+        for c in self.constraints:
+            try:
+                c.validate(value)
+                return  # Passed at least one!
+            except (ValueError, TypeError, ValidationError):
+                continue
+
+        raise ValueError("Must satisfy at least one of the provided constraints.")
+
+
+@constraint
+class AllOf:
+    """Validates that a value satisfies all of the given constraints."""
+
+    constraints: tuple[MonkConstraint, ...] = field(init=False, repr=False, compare=False)
+    message: str | None = field(default=None, kw_only=True)
+    code: str | None = field(default=None, kw_only=True)
+
+    def __init__(self, *constraints: MonkConstraint | type[Any], message: str | None = None, code: str | None = None):
+        if not constraints:
+            raise ValueError("AllOf requires at least one constraint.")
+
+        instantiated_constraints: list[MonkConstraint] = []
+        for c in constraints:
+            if isinstance(c, type) and issubclass(c, MonkConstraint):
+                try:
+                    instantiated_constraints.append(c())
+                except TypeError as e:
+                    raise TypeError(
+                        f"Constraint '{c.__name__}' missing required arguments. Did you mean {c.__name__}(...)?"
+                    ) from e
+            else:
+                instantiated_constraints.append(cast(MonkConstraint, c))
+
+        object.__setattr__(self, "constraints", tuple(instantiated_constraints))
+        object.__setattr__(self, "message", message)
+        object.__setattr__(self, "code", code)
+
+    def validate(self, value: Any) -> None:
+        for c in self.constraints:
+            try:
+                c.validate(value)
+            except (ValueError, TypeError, ValidationError) as e:
+                # If AllOf has a custom message, raise a standard ValueError so the @constraint decorator can format it
+                if getattr(self, "message", None) is not None:
+                    raise ValueError("Failed AllOf constraint.") from e
+                raise
+
+
+@constraint
 class Nullable:
     """A marker constraint to explicitly allow None values."""
 

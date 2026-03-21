@@ -5,7 +5,20 @@ from typing import Annotated, Any, Generic, TypeVar
 
 from monk import monk, validate, settings, constraint
 from monk.exceptions import UnvalidatedAccessError, ValidationError
-from monk.constraints import Not, LowerCase, IsUTC, Email, Interval, MultipleOf, Len, Nullable, NotNull
+from monk.constraints import (
+    Not,
+    AnyOf,
+    AllOf,
+    StartsWith,
+    LowerCase,
+    IsUTC,
+    Email,
+    Interval,
+    MultipleOf,
+    Len,
+    Nullable,
+    NotNull,
+)
 from monk.protocols import MonkConstraint
 
 
@@ -35,6 +48,72 @@ def test_not_inverter_constraint() -> None:
     # Auto-instantiation failure
     with pytest.raises(TypeError, match="missing required arguments"):
         Not(MultipleOf)
+
+
+def test_anyof_constraint() -> None:
+    constraint = AnyOf(Email, StartsWith("+"))
+
+    # Success paths
+    constraint.validate("test@domain.com")
+    constraint.validate("+123456789")
+
+    # Failure path
+    with pytest.raises(ValueError, match="Must satisfy at least one"):
+        constraint.validate("invalid")
+
+    # Custom message
+    custom = AnyOf(Email, StartsWith("+"), message="Must be email or phone!")
+    with pytest.raises(ValueError, match="Must be email or phone!"):
+        custom.validate("invalid")
+
+    # Initialization checks
+    with pytest.raises(ValueError):
+        AnyOf()
+    with pytest.raises(TypeError, match="missing required arguments"):
+        AnyOf(MultipleOf)
+
+
+def test_allof_constraint() -> None:
+    constraint = AllOf(LowerCase, Len(min_len=3))
+
+    # Success
+    constraint.validate("abc")
+
+    # Failures (bubbles up the specific error)
+    with pytest.raises(ValueError, match="islower"):
+        constraint.validate("ABC")
+    with pytest.raises(ValueError, match="minimum length"):
+        constraint.validate("ab")
+
+    # Custom message overrides specific errors
+    custom = AllOf(LowerCase, Len(min_len=3), message="Invalid code format.")
+    with pytest.raises(ValueError, match="Invalid code format."):
+        custom.validate("ab")
+
+    # Initialization checks
+    with pytest.raises(ValueError):
+        AllOf()
+    with pytest.raises(TypeError, match="missing required arguments"):
+        AllOf(MultipleOf)
+
+
+def test_nested_logical_composability() -> None:
+    # A complex rule: Must be an Email OR (Start with "+" AND be exactly/max 10 chars long)
+    constraint = AnyOf(Email, AllOf(StartsWith("+"), Len(max_len=10)))
+
+    # 1. Matches Email
+    constraint.validate("test@domain.com")
+
+    # 2. Matches the AllOf block
+    constraint.validate("+123456789")
+
+    # 3. Fails the AllOf block (starts with +, but too long) and fails Email
+    with pytest.raises(ValueError, match="Must satisfy at least one"):
+        constraint.validate("+12345678901")
+
+    # 4. Fails both entirely
+    with pytest.raises(ValueError, match="Must satisfy at least one"):
+        constraint.validate("invalid")
 
 
 def test_is_utc_constraint() -> None:
