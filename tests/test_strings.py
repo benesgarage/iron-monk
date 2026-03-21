@@ -71,11 +71,6 @@ def test_email_failure(invalid_email: str) -> None:
         Email().validate(invalid_email)
 
 
-def test_email_nullability() -> None:
-    # Should return silently without validation errors
-    Email().validate(None)
-
-
 @pytest.mark.parametrize(
     "invalid_type",
     [
@@ -95,9 +90,8 @@ def test_email_type_error(invalid_type: Any) -> None:
 def test_match_constraint() -> None:
     constraint = Match(r"^PROD-\d+$")
 
-    # Success & Nullability
+    # Success
     constraint.validate("PROD-12345")
-    constraint.validate(None)
 
     # Failure
     with pytest.raises(ValueError):
@@ -111,9 +105,8 @@ def test_match_constraint() -> None:
 def test_startswith_constraint() -> None:
     constraint = StartsWith("admin_")
 
-    # Success & Nullability
+    # Success
     constraint.validate("admin_user")
-    constraint.validate(None)
 
     # Failure
     with pytest.raises(ValueError):
@@ -127,9 +120,8 @@ def test_startswith_constraint() -> None:
 def test_endswith_constraint() -> None:
     constraint = EndsWith(".csv")
 
-    # Success & Nullability
+    # Success
     constraint.validate("data.csv")
-    constraint.validate(None)
 
     # Failure
     with pytest.raises(ValueError):
@@ -175,7 +167,6 @@ def test_path_constraints(tmp_path: pathlib.Path) -> None:
 
     IsDir().validate(tmp_path)
     IsDir().validate(str(tmp_path))
-    IsDir().validate(None)
     with pytest.raises(ValueError):
         IsDir().validate(file_path)
     with pytest.raises(TypeError):
@@ -183,7 +174,6 @@ def test_path_constraints(tmp_path: pathlib.Path) -> None:
 
     IsFile().validate(file_path)
     IsFile().validate(str(file_path))
-    IsFile().validate(None)
     with pytest.raises(ValueError):
         IsFile().validate(tmp_path)
     with pytest.raises(TypeError):

@@ -1,96 +1,5 @@
 # Advanced Usage
 
-## The Lifecycle
-
-When you decorate a class with `@monk`, it alters the lifecycle of the object to protect your application from invalid data.
-
-### 1. Instantiation
-When you instantiate a Monk object, validation does **not** happen immediately (unless Fail-Fast is enabled).
-
-```python
-user = User(email="bad-email", age=12)
-print(user.email) # ❌ Raises UnvalidatedAccessError!
-```
-
-### 2. Validation
-When you are ready to validate the data, explicitly call the `validate()` function.
-
-```python
-from monk import validate
-
-try:
-    valid_user = validate(user)
-except ValidationError as e:
-    print(e.errors) 
-```
-
-### 3. Safe Access
-Once `validate()` succeeds, the object is ready for use. It behaves exactly like a standard, high-performance Python dataclass, and all attributes are safely accessible.
-
-## Handling Errors
-
-When validation fails, `iron-monk` raises a `ValidationError`. This exception contains all the accumulated errors across your dataclass.
-
-You can extract these errors in two ways depending on your use case:
-
-1. Structured Data (`e.errors`): Returns a `list` of `ErrorDict` objects (a `TypedDict` containing `field`, `message`, and `code`).
-2. Flattened Strings (`e.flatten()`): Returns a `list` of formatted `{field}: {message}` strings. This is useful for CLI tools, console printouts, or basic application logging.
-
-```python
-from typing import Annotated
-
-from monk import monk, validate
-from monk.constraints import Email, Interval
-from monk.exceptions import ValidationError
-
-@monk
-class User:
-    email: Annotated[str, Email]
-    age: Annotated[int, Interval(ge=18)]
-
-user = User(email="bad-email", age=12)
-
-try: 
-    validate(user)
-except ValidationError as e: 
-    # 1. Structured Data
-    print(e.errors[0]["field"]) # "email"
-    print(e.errors[0]["message"])  # "Must be a valid email address."
-    
-    # 2. Flattened Strings
-    print(e.flatten())
-    # [
-    #   "email: Must be a valid email address.", 
-    #   "age: Must be greater than or equal to 18."
-    # ]
-```
-
-## Fail-Fast Mode
-By default, `iron-monk` defers validation until you explicitly call `validate(obj)`. If you prefer the traditional "crash on init" behavior of frameworks like Pydantic, you can disable defer mode.
-
-**1. Globally via Environment Variable:**
-```sh
-export MONK_DEFER=false
-```
-
-**2. Globally via Code:**
-```python
-from monk import settings
-settings.defer = False
-```
-
-**3. Per-Class Override:**
-```python
-from typing import  Annotated
-
-from monk import monk
-from monk.constraints import StartsWith
-
-@monk(defer=False)
-class Headers:
-    authorization: Annotated[str, StartsWith("Bearer ")]
-```
-
 ## Custom Error Messages
 Every built-in constraint supports an optional `message` argument. `iron-monk` uses string formatting to allow you to dynamically inject the invalid `{value}` or constraint parameters.
 
@@ -193,7 +102,6 @@ A valid constraint is just a class with a `validate(self, value: Any) -> None` m
 ```python
 class IsEven:
     def validate(self, value: Any) -> None:
-        if value is None: return
         try:
             if value % 2 != 0:
                 raise ValueError("Must be an even number.")
@@ -215,7 +123,6 @@ class DivisibleBy:
     divisor: int
     # The decorator handles the rest!
     def validate(self, value: Any) -> None:
-        if value is None: return
         try:
             if value % self.divisor != 0:
                 raise ValueError(f"Must be divisible by {self.divisor}")

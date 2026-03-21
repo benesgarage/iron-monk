@@ -20,8 +20,7 @@ def test_interval_constraint() -> None:
     with pytest.raises(ValueError):
         constraint_inclusive.validate(11)
 
-    # Nullability & Type Errors
-    constraint.validate(None)
+    # Type Errors
     with pytest.raises(TypeError):
         constraint.validate("string")
 
@@ -30,7 +29,6 @@ def test_multiple_of_constraint() -> None:
     constraint = MultipleOf(5)
 
     constraint.validate(10)
-    constraint.validate(None)
 
     with pytest.raises(ValueError):
         constraint.validate(11)

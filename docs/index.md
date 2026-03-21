@@ -3,7 +3,7 @@
   <h1>iron-monk</h1>
 </div>
 
-Welcome to the official documentation for **iron-monk**, a minimalist, strict validation library for Python dataclasses.
+Welcome to the official documentation for **iron-monk**, a minimalist, zero-coercion validation library for Python dataclasses.
 
 ## The Philosophy
 The Python ecosystem is dominated by heavy validation frameworks. 
@@ -27,15 +27,24 @@ To validate those three fields, developers are currently installing libraries th
 
 - 🎯 **Do one thing well**: Unlike libraries that parse, coerce, and serialize, we focus strictly on validation.
 - 🪶 **Zero Dependencies:** Pure Python. No compiled binaries or bloated environments.
-- 🛡️ **No Magic:** We don't secretly coerce strings into integers. Strict types mean strict types.
+- 🛡️ **Zero Coercion**: We don't secretly cast the string "123" into the integer 123. Your data is validated exactly as it is received.
+- 🤝 **Agnostic to Type Checking:** We enforce *business constraints*, not base Python types.
 - ⏳ **Deferred Validation:** Capture bad data in a guarded state instead of crashing instantly.
 - 🧬 **Zero Inheritance:** No massive base classes polluting your namespace. Just a decorator.
+
+### Validation vs. Type Checking
+We draw a strict line between *Type Checking* ("Does this value match the Python type hint?") and *Value Validation* ("Does this value satisfy my business rules?"). 
+
+`iron-monk` focuses entirely on the latter. It does not perform deep runtime type-checking. This means it works perfectly as a standalone framework for standard API validation, or it can stack flawlessly alongside dedicated strict typing tools like `beartype` or `typeguard` without stepping on their toes.
+
+The one area where these lines blur is missing data (nullability). To learn how `iron-monk` enforces presence, or how to configure it to completely defer to an external type checker, read about [Required vs. Optional Fields](core_concepts.md#required-vs-optional-fields) and [Relying on Runtime Type Checkers](core_concepts.md#relying-on-runtime-type-checkers).
 
 ## Getting Started
 
 To learn how to use the framework, check out:
 
-1. [**The Constraint Toolkit**](constraints.md): A complete list of all built-in rules (like `Email`, `Interval`, and `Each`).
+1. [**Core Concepts**](core_concepts.md): Understand the validation lifecycle, how to extract errors, and required vs. optional fields.
+2. [**The Constraint Toolkit**](constraints.md): A complete list of all built-in rules (like `Email`, `Interval`, and `Each`).
 2. [**Advanced Usage**](advanced.md): Learn about Cross-Field validation, Fail-Fast mode, and Custom Error Messages.
 3. [**Real-World Examples**](examples.md): See how to seamlessly drop `iron-monk` into frameworks like Strawberry GraphQL, Starlette, and Tyro.
 

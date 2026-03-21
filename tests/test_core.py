@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from monk import monk, validate, settings, constraint
 from monk.exceptions import UnvalidatedAccessError, ValidationError
-from monk.constraints import Not, LowerCase, IsUTC, Email, Interval, MultipleOf, Len
+from monk.constraints import Not, LowerCase, IsUTC, Email, Interval, MultipleOf, Len, Nullable, NotNull
 from monk.protocols import MonkConstraint
 
 
@@ -27,7 +27,6 @@ def test_not_inverter_constraint() -> None:
 
     # Success (it is NOT lowercase)
     constraint.validate("HELLO")
-    constraint.validate(None)
 
     # Failure (it IS lowercase, so Not fails)
     with pytest.raises(ValueError):
@@ -44,7 +43,6 @@ def test_is_utc_constraint() -> None:
     dt_other = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=2)))
 
     IsUTC.validate(dt_utc)
-    IsUTC.validate(None)
     with pytest.raises(ValueError):
         IsUTC.validate(dt_naive)
     with pytest.raises(ValueError):
@@ -120,14 +118,17 @@ def test_global_config_defer() -> None:
 def test_env_var_global_config(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that the environment variable correctly toggles the configuration."""
     monkeypatch.setenv("MONK_DEFER", "false")
+    monkeypatch.setenv("MONK_DEFAULT_ALLOW_NONE", "true")
 
     import monk.config
 
     importlib.reload(monk.config)  # Reload the file so the top-level 'if' statement runs again
     assert monk.config.settings.defer is False
+    assert monk.config.settings.default_allow_none is True
 
     # Clean up and restore state
     monkeypatch.delenv("MONK_DEFER")
+    monkeypatch.delenv("MONK_DEFAULT_ALLOW_NONE")
     importlib.reload(monk.config)
 
 
@@ -231,3 +232,68 @@ def test_custom_error_codes() -> None:
     assert errors[0]["code"] == "Interval"
     assert errors[1]["field"] == "pin"
     assert errors[1]["code"] == "INVALID_PIN"
+
+
+def test_explicit_nullability() -> None:
+    @monk
+    class RequiredModel:
+        # Strictly Required. Passing None will fail with NotNull!
+        email: Annotated[str, Email]
+
+        # Top-Level Optional. Passing None is safe.
+        age: Annotated[int | None, Nullable, Interval(ge=18)] = None
+
+    with pytest.raises(ValidationError) as exc:
+        validate(RequiredModel(email=None))  # type: ignore
+
+    errors = exc.value.errors
+    assert len(errors) == 1
+    assert errors[0]["field"] == "email"
+    assert errors[0]["code"] == "NotNull"
+
+    # Succeeding explicit nullable
+    validate(RequiredModel(email="test@domain.com", age=None))
+
+    # Succeeding explicit nullable with an actual value (covers skipping the marker in operations.py)
+    validate(RequiredModel(email="test@domain.com", age=25))
+
+
+def test_global_allow_none_by_default() -> None:
+    # Change the global setting so fields are nullable by default
+    settings.default_allow_none = True
+
+    @monk
+    class LaxModel:
+        age: Annotated[int, NotNull, Interval(ge=18)]
+        email: Annotated[str | None, Email] = None
+
+    # email passes because default_allow_none is True
+    with pytest.raises(ValidationError) as exc:
+        validate(LaxModel(age=None))  # type: ignore
+
+    errors = exc.value.errors
+    assert len(errors) == 1
+    assert errors[0]["field"] == "age"
+    assert errors[0]["code"] == "NotNull"
+
+    # Reset for other tests
+    settings.default_allow_none = False
+
+
+def test_not_null_custom_message_and_code() -> None:
+    @monk
+    class CustomRequiredModel:
+        email: Annotated[
+            str,
+            NotNull(message="We really need your email!", code="MISSING_EMAIL"),
+            Email,
+        ]
+
+    with pytest.raises(ValidationError) as exc:
+        validate(CustomRequiredModel(email=None))  # type: ignore
+
+    errors = exc.value.errors
+    assert len(errors) == 1
+    assert errors[0]["field"] == "email"
+    assert errors[0]["message"] == "We really need your email!"
+    assert errors[0]["code"] == "MISSING_EMAIL"

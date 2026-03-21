@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0]
+
+### Added
+- **Explicit Nullability:** Fields with constraints are now strictly required by default. Passing `None` to a constrained field instantly raises a validation error with the `NotNull` code.
+- **`Nullable` and `NotNull` Markers:** Added explicit marker constraints to dictate presence. These markers can be used at the top-level or deeply nested inside collections (e.g., `Each(Nullable, LowerCase)`).
+- **Type-Checker Compatibility:** Added `settings.default_allow_none` (and the `MONK_DEFAULT_ALLOW_NONE` environment variable) to allow `None` values globally by default. This allows developers to pair `iron-monk` with dedicated runtime type-checkers (like `beartype` or `typeguard`).
+- **Core Concepts Guide:** Restructured the documentation into a clean, logical progression, separating Core Concepts from Advanced Usage.
+
+### Changed
+- **Constraint Boilerplate Eradicated:** Removed implicit `None` skipping from all built-in constraints. The engine now handles nullability structurally before constraint execution. Custom constraints no longer need to implement `if value is None: return`!
+- **Philosophy Terminology:** Updated documentation phrasing to emphasize "Zero Coercion" and "Agnostic to Type Checking" to clearly define framework boundaries.
+
 ## [0.5.0]
 
 ### Added

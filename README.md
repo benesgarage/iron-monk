@@ -3,7 +3,7 @@
     <img src="./docs/assets/monk.png" width="400" alt="iron-monk logo" style="display: block; margin-bottom: 0; padding-bottom: 0;">
   </a>
   <h1 style="margin-top: 0; padding-top: 0;">iron-monk</h1>
-  <h4>A minimalist, strict validation library for Python dataclasses.</h4>
+  <h4>A minimalist, zero-coercion validation library for Python dataclasses.</h4>
 </div>
 
 [![CI/CD](https://img.shields.io/github/actions/workflow/status/benesgarage/iron-monk/ci.yml?branch=main&label=CI)](https://github.com/benesgarage/iron-monk/actions)
@@ -71,7 +71,8 @@ print(user.email) # "test@domain.com"
 The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is built for a completely different philosophy:
 - 🎯 **Do one thing well**: Unlike libraries that parse, coerce, and serialize, we focus strictly on validation.
 - 🪶 **Zero Dependencies:** Pure Python. No compiled binaries or bloated environments.
-- 🛡️ **No Magic:** We don't secretly coerce strings into integers. Strict types mean strict types.
+- 🛡️ **Zero Coercion**: We don't secretly cast the string "123" into the integer 123. Your data is validated exactly as it is received.
+- 🤝 **Agnostic to Type Checking:** We enforce *business constraints*, not base Python types.
 - ⏳ **Deferred Validation:** Capture bad data in a guarded state instead of crashing instantly.
 - 🧬 **Zero Inheritance:** No massive base classes polluting your namespace. Just a decorator.
 
@@ -82,6 +83,11 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
 - 🖥️ tyro (CLI tool): Generate command-line interfaces from dataclasses and validate with `iron-monk`.
 
 👉 [**See `iron-monk` integrate with these projects, and more, in our Real-World Examples &rarr;**](https://benesgarage.github.io/iron-monk/examples/)
+
+## Core Concepts
+Understand the validation lifecycle, how to cleanly extract error dictionaries, and how to enforce required fields.
+
+👉 [**Read the Core Concepts Guide &rarr;**](docs/core_concepts.md)
 
 ## The Toolkit
 **Batteries included**. `iron-monk` comes with a comprehensive suite of built-in constraints. From networking (`Email`, `URL`, `IPAddress`) to collections (`Each`, `Unique`) and logic (`Not`, `Predicate`), you will rarely need to write your own rules.

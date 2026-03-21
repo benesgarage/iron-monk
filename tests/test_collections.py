@@ -1,8 +1,9 @@
 import pytest
+from dataclasses import field
 from typing import Annotated
 from monk import monk, validate
 from monk.exceptions import ValidationError
-from monk.constraints import Each, Len, LowerCase, Email, Unique, Contains, OneOf, MultipleOf
+from monk.constraints import Each, Len, LowerCase, Email, Unique, Contains, OneOf, MultipleOf, Nullable, NotNull
 
 
 # --- Raw Constraint Tests ---
@@ -16,9 +17,6 @@ def test_len_constraint_success() -> None:
     constraint.validate([1, 2, 3, 4])
     constraint.validate("abc")
     constraint.validate({"a": 1, "b": 2})
-
-    # Nullability
-    constraint.validate(None)
 
 
 def test_len_constraint_failure() -> None:
@@ -52,8 +50,6 @@ def test_contains_constraint_success() -> None:
     # Dicts (checks keys)
     constraint.validate({"apple": 1, "orange": 2})
 
-    constraint.validate(None)
-
 
 def test_contains_constraint_failure() -> None:
     constraint = Contains("apple")
@@ -72,7 +68,6 @@ def test_unique_constraint_success() -> None:
     Unique().validate([1, 2, 3, 4])
     Unique().validate(("a", "b", "c"))
     Unique().validate({1, 2, 3})
-    Unique().validate(None)
 
     # Deeply nested unhashable structures
     Unique().validate([[1, 2], [3, 4]])
@@ -107,7 +102,6 @@ def test_one_of_constraint_success() -> None:
 
     constraint.validate("active")
     constraint.validate("closed")
-    constraint.validate(None)
 
 
 def test_one_of_constraint_failure() -> None:
@@ -140,6 +134,44 @@ def test_each_init_and_type_failure() -> None:
         Each(MultipleOf)
 
 
+def test_each_nullability_failure() -> None:
+    # Prove that the Each constraint does NOT skip None items, and properly raises NotNull errors
+    with pytest.raises(ValidationError) as exc:
+        Each(LowerCase).validate(["hello", None, "world"])
+
+    errors = exc.value.errors
+    assert len(errors) == 1
+    assert errors[0]["field"] == "[1]"
+    assert errors[0]["code"] == "NotNull"
+    assert "cannot be null" in errors[0]["message"]
+
+
+def test_nullable_marker() -> None:
+    # 0. Cover the dummy validate method required by the MonkConstraint Protocol
+    Nullable().validate("anything")
+    NotNull().validate("anything")
+
+    # 1. Success & Nullability
+    constraint = Each(Nullable, LowerCase)
+    constraint.validate(["hello", None])
+
+    # 2. Failure
+    with pytest.raises(ValidationError) as exc:
+        constraint.validate(["HELLO", None])
+    assert "islower" in exc.value.errors[0]["message"]
+
+    # 3. Requires other constraints
+    with pytest.raises(ValueError, match="functional constraint besides markers"):
+        Each(Nullable)
+
+    # 4. NotNull inside Each
+    constraint_not_null = Each(NotNull, LowerCase)
+    with pytest.raises(ValidationError) as exc_nn:
+        constraint_not_null.validate(["hello", None])
+    assert exc_nn.value.errors[0]["field"] == "[1]"
+    assert exc_nn.value.errors[0]["code"] == "NotNull"
+
+
 # --- Dataclass Integration Tests ---
 
 
@@ -155,7 +187,9 @@ class Team:
     department: Annotated[str, OneOf(["engineering", "sales", "marketing"])]
     tags: Annotated[list[str], Contains("core")]
     # Ensure we skip validation if None is present
-    managers: Annotated[list[str] | None, Each(Len(max_len=50))] = None
+    managers: Annotated[list[str] | None, Nullable, Each(Len(max_len=50))] = None
+    # Ensure we gracefully handle explicit nested nulls
+    sparse_matrix: Annotated[list[list[str | None]], Each(Each(Nullable, LowerCase))] = field(default_factory=list)
 
 
 def test_each_constraint_success() -> None:
@@ -165,6 +199,7 @@ def test_each_constraint_success() -> None:
         matrix=[["a", "b"], ["c", "d"]],
         department="engineering",
         tags=["backend", "core"],
+        sparse_matrix=[["a", None], [None, "b"]],
     )
     validate(team)  # Should not raise
 
@@ -176,13 +211,14 @@ def test_each_constraint_failure() -> None:
         matrix=[["a", "B"]],
         department="engineeri",
         tags=["backend"],
+        sparse_matrix=[["A", None]],
     )
 
     with pytest.raises(ValidationError) as exc:
         validate(team)
 
     errors = exc.value.errors
-    assert len(errors) == 6
+    assert len(errors) == 7
 
     assert "members" in errors[0]["field"]  # 'al' failed length
     assert "members" in errors[1]["field"]  # 'Bob' failed LowerCase
@@ -190,3 +226,4 @@ def test_each_constraint_failure() -> None:
     assert "matrix" in errors[3]["field"]  # 'B' failed LowerCase in the nested array
     assert "department" in errors[4]["field"]  # 'engineeri' fails OneOf
     assert "tags" in errors[5]["field"]  # Does not contain 'core'
+    assert "sparse_matrix[0][0]" in errors[6]["field"]  # 'A' failed LowerCase

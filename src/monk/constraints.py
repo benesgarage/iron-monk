@@ -13,6 +13,7 @@ from .protocols import MonkConstraint, SupportsGt, SupportsGe, SupportsLt, Suppo
 from .decorators import constraint
 from .exceptions import ValidationError
 from .types import ErrorDict
+from .config import settings
 
 
 @constraint
@@ -24,8 +25,6 @@ class Predicate:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
         try:
             if not self.func(value):
                 func_name = getattr(self.func, "__name__", "custom predicate")
@@ -54,8 +53,6 @@ class Not:
                 ) from e
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
         try:
             cast(MonkConstraint, self.constraint).validate(value)
         except (ValueError, TypeError):
@@ -63,6 +60,28 @@ class Not:
 
         constraint_name = getattr(type(self.constraint), "__name__", "specified constraint")
         raise ValueError(f"Must not satisfy {constraint_name}.")
+
+
+@constraint
+class Nullable:
+    """A marker constraint to explicitly allow None values."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        pass
+
+
+@constraint
+class NotNull:
+    """A marker constraint to explicitly forbid None values."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        pass
 
 
 @constraint(kw_only=True)
@@ -77,9 +96,6 @@ class Interval:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
-
         try:
             if self.gt is not None and not (value > self.gt):
                 raise ValueError(f"Must be greater than {self.gt}.")
@@ -121,9 +137,6 @@ class Len:
                 raise ValueError(f"min_len ({self.min_len}) cannot be greater than max_len ({self.max_len}).")
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
-
         try:
             length = len(value)
         except TypeError:
@@ -146,9 +159,6 @@ class MultipleOf:
             raise ValueError("multiple_of cannot be 0.")
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
-
         try:
             if value % self.multiple_of != 0:
                 raise ValueError(f"Must be a multiple of {self.multiple_of}.")
@@ -170,9 +180,6 @@ class Match:
         object.__setattr__(self, "_compiled", re.compile(self.pattern))
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
-
         try:
             if not self._compiled.match(value):
                 raise ValueError(f"Does not match the required pattern: {self.pattern}")
@@ -196,9 +203,6 @@ class OneOf:
             raise ValueError("OneOf requires at least one choice.")
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
-
         if value not in self.choices:
             allowed = ", ".join(repr(c) for c in self.choices)
             raise ValueError(f"Must be one of: [{allowed}], got {repr(value)}.")
@@ -209,13 +213,26 @@ class Each:
     """Validates that every element in an iterable satisfies all the given constraints."""
 
     constraints: tuple[MonkConstraint, ...]
+    allow_none: bool = field(default=False, init=False, repr=False, compare=False)
+    not_null_constraint: Any = field(default=None, init=False, repr=False, compare=False)
 
     def __init__(self, *constraints: MonkConstraint | type[Any]):
         if not constraints:
             raise ValueError("Each requires at least one constraint.")
 
         instantiated_constraints: list[MonkConstraint] = []
+        allow_none = settings.default_allow_none
+        not_null_constraint: Any = None
+
         for c in constraints:
+            if c is Nullable or isinstance(c, Nullable):
+                allow_none = True
+                continue
+            if c is NotNull or isinstance(c, NotNull):
+                allow_none = False
+                not_null_constraint = c() if isinstance(c, type) else c
+                continue
+
             if isinstance(c, type) and issubclass(c, MonkConstraint):
                 try:
                     instantiated_constraints.append(c())
@@ -226,18 +243,29 @@ class Each:
             else:
                 instantiated_constraints.append(cast(MonkConstraint, c))
 
+        if not instantiated_constraints:
+            raise ValueError("Each requires at least one functional constraint besides markers like Nullable/NotNull.")
+
         # Safely assign to a frozen dataclass
         object.__setattr__(self, "constraints", tuple(instantiated_constraints))
+        object.__setattr__(self, "allow_none", allow_none)
+        object.__setattr__(self, "not_null_constraint", not_null_constraint)
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
-
         if not isinstance(value, Iterable):
             raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
 
         errors: list[ErrorDict] = []
         for i, item in enumerate(value):
+            if item is None:
+                if self.allow_none:
+                    continue
+                else:
+                    msg = getattr(self.not_null_constraint, "message", None) or "Field is required and cannot be null."
+                    code = getattr(self.not_null_constraint, "code", None) or "NotNull"
+                    errors.append({"field": f"[{i}]", "message": msg, "code": code})
+                    continue
+
             for c in self.constraints:
                 try:
                     c.validate(item)
@@ -262,9 +290,6 @@ class Contains:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
-
         try:
             if self.item not in value:
                 raise ValueError(f"Must contain {repr(self.item)}.")
@@ -280,9 +305,6 @@ class Unique:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
-
         if not isinstance(value, Iterable):
             raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
 
@@ -313,8 +335,6 @@ class Email:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
         try:
             if not self._regex.match(value):
                 raise ValueError("Must be a valid email address.")
@@ -329,9 +349,6 @@ class StartsWith:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
-
         try:
             if not value.startswith(self.prefix):
                 raise ValueError(f"Must start with '{repr(self.prefix)}'")
@@ -346,8 +363,6 @@ class EndsWith:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
         try:
             if not value.endswith(self.suffix):
                 raise ValueError(f"Must end with '{repr(self.suffix)}'")
@@ -363,8 +378,6 @@ class UUID:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
         if isinstance(value, uuid.UUID):
             return
         try:
@@ -381,8 +394,6 @@ class URL:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
         try:
             result = urlparse(str(value))
             if not all([result.scheme, result.netloc]):
@@ -399,8 +410,6 @@ class IPAddress:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
         if isinstance(value, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
             return
         try:
@@ -417,8 +426,6 @@ class IsDir:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
         try:
             if not pathlib.Path(value).is_dir():
                 raise ValueError("Must be an existing directory.")
@@ -434,8 +441,6 @@ class IsFile:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if value is None:
-            return
         try:
             if not pathlib.Path(value).is_file():
                 raise ValueError("Must be an existing file.")

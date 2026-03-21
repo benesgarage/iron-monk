@@ -2,8 +2,19 @@ import dataclasses
 from typing import TypeVar, Any, cast, Iterable
 from .exceptions import ValidationError
 from .types import ErrorDict
+from .config import settings
 
 T = TypeVar("T")
+
+
+def _is_nullable(c: Any) -> bool:
+    """Duck-type check to avoid circular imports."""
+    return getattr(c, "__name__", type(c).__name__) == "Nullable"
+
+
+def _is_not_null(c: Any) -> bool:
+    """Duck-type check to avoid circular imports."""
+    return getattr(c, "__name__", type(c).__name__) == "NotNull"
 
 
 def validate(instance: T) -> T:
@@ -33,24 +44,43 @@ def validate(instance: T) -> T:
                 _recurse(v, f"{prefix}[{repr(k)}]")
 
     rules = getattr(instance, "__monk_rules__", {})
-    for field, constraints in rules.items():
-        value = object.__getattribute__(instance, field)
+    for field_info in dataclasses.fields(cast(Any, instance)):
+        field_name = field_info.name
+        value = object.__getattribute__(instance, field_name)
+        constraints = rules.get(field_name, [])
+
+        if value is None:
+            if constraints:
+                is_explicitly_nullable = any(_is_nullable(c) for c in constraints)
+                is_explicitly_not_null = any(_is_not_null(c) for c in constraints)
+
+                allows_none = (
+                    True
+                    if is_explicitly_nullable
+                    else (False if is_explicitly_not_null else settings.default_allow_none)
+                )
+
+                if not allows_none:
+                    not_null_c = next((c for c in constraints if _is_not_null(c)), None)
+                    msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
+                    code = getattr(not_null_c, "code", None) or "NotNull"
+                    errors.append({"field": field_name, "message": msg, "code": code})
+            continue
+
         for c in constraints:
+            if _is_nullable(c) or _is_not_null(c):
+                continue
             try:
                 c.validate(value)
             except ValidationError as e:
                 for err in e.errors:
-                    err["field"] = f"{field}{err.get('field', '')}"
+                    err["field"] = f"{field_name}{err.get('field', '')}"
                     errors.append(err)
             except (ValueError, TypeError) as e:
                 error_code = getattr(c, "code", None) or type(c).__name__
-                errors.append({"field": field, "message": str(e), "code": error_code})
+                errors.append({"field": field_name, "message": str(e), "code": error_code})
 
-    # Recursively validate nested Monk objects
-    for field_info in dataclasses.fields(cast(Any, instance)):
-        value = object.__getattribute__(instance, field_info.name)
-
-        _recurse(value, field_info.name)
+        _recurse(value, field_name)
 
     # Run cross-field validation ONLY if all field-level rules passed
     if not errors and hasattr(instance, "__monk_validate__"):
