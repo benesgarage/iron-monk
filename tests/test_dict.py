@@ -93,3 +93,18 @@ def test_nested_dict_validation() -> None:
 
     assert exc.value.errors[0]["field"] == "address"
     assert "is not a dictionary" in exc.value.errors[0]["message"]
+
+
+def test_strict_dictionary_validation() -> None:
+    class StrictSchema(TypedDict):
+        name: str
+
+    # 1. Fails by default if extra keys are present
+    with pytest.raises(ValidationError) as exc:
+        validate_dict({"name": "Kai", "is_admin": True}, StrictSchema)
+
+    assert exc.value.errors[0]["code"] == "StrictDictionary"
+    assert "Unrecognized fields provided: is_admin" in exc.value.errors[0]["message"]
+
+    # 2. Passes and safely strips the extra keys if drop_extra_keys=True
+    assert validate_dict({"name": "Kai", "is_admin": True}, StrictSchema, drop_extra_keys=True) == {"name": "Kai"}

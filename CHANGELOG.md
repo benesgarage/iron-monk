@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0]
+
+### Added
+- **Dictionary Sanitization:** Added the `drop_extra_keys=True` flag to `validate_dict()`. This allows developers to sanitize input dictionaries by stripping out any keys not explicitly defined in the schema.
+
 ## [0.13.0]
 
 ### Added

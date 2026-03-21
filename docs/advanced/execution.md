@@ -29,6 +29,36 @@ except ValidationError as e:
     # ['email: Must be a valid email address.', 'age: Must be greater than or equal to 18.']
 ```
 
+### Strict Mode & Dropping Extra Keys
+By default, `validate_dict` is strict. If the input dictionary contains any keys that are not explicitly defined in your schema, it will instantly raise a `ValidationError`.
+This prevents API bugs (like a user misspelling an optional field) and stops Mass Assignment vulnerabilities.
+
+```python
+from typing import TypedDict
+from monk import validate_dict
+
+class UserDict(TypedDict):
+    name: str
+
+payload = {"name": "John", "is_admin": True}
+
+# ❌ Fails! "is_admin" is not in the schema.
+validate_dict(payload, UserDict) 
+# ValidationError: ['__root__: Unrecognized fields provided: is_admin']
+```
+
+You can explicitly opt-out by passing `drop_extra_keys=True`.
+Instead of failing, `iron-monk` will act as a sanitizer, stripping out all unknown fields and returning a clean dictionary safe for your database!
+
+```python
+# ✅ Passes! Returns a brand new, sanitized dictionary.
+safe_data = validate_dict(payload, UserDict, drop_extra_keys=True)
+
+print(safe_data) 
+# {"name": "John"}
+```
+
+
 ## Partial Validation (PATCH Requests)
 
 When building HTTP `PATCH` endpoints, clients only send the fields they wish to update.

@@ -147,16 +147,29 @@ def validate_return(value: Any, constraints: list[Any]) -> None:
 
 
 @functools.lru_cache(maxsize=None)
-def _get_schema_rules(schema: type) -> dict[str, list[MonkConstraint]]:
-    """Caches the extracted rules for a given TypedDict schema to maximize performance."""
+def _get_schema_rules(schema: type) -> tuple[set[str], dict[str, list[MonkConstraint]]]:
+    """Caches the allowed keys and extracted rules for a given TypedDict schema to maximize performance."""
     hints = get_type_hints(schema, include_extras=True)
-    return _extract_monk_metadata(hints)
+    return set(hints.keys()), _extract_monk_metadata(hints)
 
 
-def validate_dict(data: dict[str, Any], schema: type, *, partial: bool = False) -> dict[str, Any]:
+def validate_dict(
+    data: dict[str, Any], schema: type, *, partial: bool = False, drop_extra_keys: bool = False
+) -> dict[str, Any]:
     """Validates a raw dictionary against a TypedDict or Dataclass schema without instantiating an object."""
-    rules = _get_schema_rules(schema)
+    allowed_keys, rules = _get_schema_rules(schema)
     errors: list[ErrorDict] = []
+
+    if not drop_extra_keys:
+        extra_keys = set(data.keys()) - allowed_keys
+        if extra_keys:
+            errors.append(
+                {
+                    "field": "__root__",
+                    "message": f"Unrecognized fields provided: {', '.join(sorted(extra_keys))}",
+                    "code": "StrictDictionary",
+                }
+            )
 
     # We iterate over the SCHEMA rules to catch missing required fields
     for field_name, constraints in rules.items():
@@ -168,6 +181,9 @@ def validate_dict(data: dict[str, Any], schema: type, *, partial: bool = False) 
 
     if errors:
         raise ValidationError(errors)
+
+    if drop_extra_keys:
+        return {k: v for k, v in data.items() if k in allowed_keys}
 
     return data
 
