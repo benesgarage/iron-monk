@@ -15,7 +15,7 @@ from typing import (
 )
 
 from .protocols import MonkConstraint
-from .operations import validate, validate_arguments
+from .operations import validate, validate_arguments, validate_return
 from .config import settings
 from .exceptions import UnvalidatedAccessError
 
@@ -29,9 +29,6 @@ def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, list[MonkConstrai
     rules: dict[str, list[MonkConstraint]] = {}
 
     for name, hint in hints.items():
-        if name == "return":
-            continue
-
         # Look for our specific MonkConstraint in Annotated metadata
         metadata = getattr(hint, "__metadata__", [])
 
@@ -199,16 +196,20 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
     def _wrap_function(func: Callable[P, R]) -> Callable[P, R]:
         hints = get_type_hints(func, include_extras=True)
         rules = _extract_monk_metadata(hints)
+        return_constraints = rules.pop("return", [])
         sig = inspect.signature(func)
 
         if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
-            async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+            async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
                 bound = sig.bind(*args, **kwargs)
                 bound.apply_defaults()
                 validate_arguments(bound.arguments, rules)
-                return await func(*args, **kwargs)  # type: ignore
+                result = await func(*args, **kwargs)
+                if return_constraints:
+                    validate_return(result, return_constraints)
+                return result
 
             return cast(Callable[P, R], async_wrapper)
         else:
@@ -218,7 +219,10 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
                 bound = sig.bind(*args, **kwargs)
                 bound.apply_defaults()
                 validate_arguments(bound.arguments, rules)
-                return func(*args, **kwargs)
+                result = func(*args, **kwargs)
+                if return_constraints:
+                    validate_return(result, return_constraints)
+                return result
 
             return sync_wrapper
 

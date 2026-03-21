@@ -1,7 +1,7 @@
 import pytest
 from typing import Annotated
 from monk import monk
-from monk.constraints import Email, Interval, Len, Nullable
+from monk.constraints import Email, Interval, Len, Nullable, LowerCase
 from monk.exceptions import ValidationError
 
 
@@ -91,3 +91,32 @@ def test_method_validation() -> None:
     with pytest.raises(ValidationError) as exc:
         Processor.process_static("ab")
     assert exc.value.errors[0]["field"] == "data"
+
+
+def test_sync_function_return_validation() -> None:
+    @monk
+    def process_data(data: str) -> Annotated[str, LowerCase]:
+        return data
+
+    # Success
+    assert process_data("hello") == "hello"
+
+    # Failure
+    with pytest.raises(ValidationError) as exc:
+        process_data("HELLO")
+
+    assert exc.value.errors[0]["field"] == "return"
+    assert exc.value.errors[0]["code"] == "Predicate"
+
+
+@pytest.mark.anyio
+async def test_async_function_return_validation() -> None:
+    @monk
+    async def fetch_data() -> Annotated[dict[str, str], Len(min_len=1)]:
+        return {}
+
+    with pytest.raises(ValidationError) as exc:
+        await fetch_data()
+
+    assert exc.value.errors[0]["field"] == "return"
+    assert exc.value.errors[0]["code"] == "Len"

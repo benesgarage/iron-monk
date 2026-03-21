@@ -147,14 +147,17 @@ class Headers:
     authorization: Annotated[str, StartsWith("Bearer ")]
 ```
 
-## Function and Method Validation
+# Function and Method Validation
 
 While `iron-monk` is heavily tailored for validating Data Transfer Objects (DTOs), the `@monk` decorator is actually a dual-purpose tool.
 
-You can apply it directly to any standard Python function or method to natively validate its incoming arguments.
-It reads your `Annotated` constraints, validates the passed arguments, and aggregates failures into a standard `ValidationError` before the function executes.
+You can apply it directly to any standard Python function or method to natively validate its incoming arguments **and** its return value! It reads your `Annotated` constraints, validates the data, and aggregates failures into a standard `ValidationError`.
 
 > **⚡ Note:** Unlike dataclasses, function validation is **always instantaneous (fail-fast)**. There is no deferred state; if the arguments violate your constraints, the function will immediately raise an error and will not run.
+
+## Validating Inputs
+
+When applied to a function, `iron-monk` will intercept the incoming arguments and validate them before the function executes.
 
 ```python
 from typing import Annotated
@@ -174,9 +177,37 @@ except ValidationError as e:
     # ['email: Must be a valid email address.', 'age: Must be greater than or equal to 18.']
 ```
 
-It also fully supports asynchronous functions and all standard Object-Oriented methods (instance methods, class methods, and static methods). Just make sure `@monk` is the innermost decorator (placed directly above the function definition)
+## Validating Outputs (Return Types)
+
+`iron-monk` doesn't just protect your functions from bad inputs; it also protects your application from bad outputs. 
+
+If you add `Annotated` constraints to your function's return type hint, the `@monk` decorator will safely intercept the result, validate it, and raise a `ValidationError` (with the field name `"return"`) before the bad data can escape!
 
 ```python
+from typing import Annotated
+from monk import monk
+from monk.constraints import LowerCase
+from monk.exceptions import ValidationError
+
+@monk
+def generate_username(name: str) -> Annotated[str, LowerCase]:
+    # Oops! A bug in our business logic returns uppercase
+    return name.upper()  
+
+try:
+    generate_username("kai")
+except ValidationError as e:
+    print(e.flatten())
+    # ['return: Failed validation for islower.']
+```
+
+## Object-Oriented & Async Support
+
+The decorator fully supports asynchronous functions and all standard Object-Oriented methods (instance methods, class methods, and static methods). Just make sure `@monk` is the **innermost** decorator (placed directly above the function definition).
+
+```python
+from typing import Annotated
+from monk import monk
 from monk.constraints import Each, IPAddress
 
 class NotificationService:

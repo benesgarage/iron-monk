@@ -83,6 +83,15 @@ def validate_arguments(arguments: dict[str, Any], rules: dict[str, list[Any]]) -
         raise ValidationError(errors)
 
 
+def validate_return(value: Any, constraints: list[Any]) -> None:
+    """Validates a function's return value against extracted constraints."""
+    errors: list[ErrorDict] = []
+    _validate_field_and_recurse("return", value, constraints, errors)
+
+    if errors:
+        raise ValidationError(errors)
+
+
 def validate(instance: T) -> T:
     """
     Validates a Monk dataclass instance.

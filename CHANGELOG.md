@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0]
+
+### Added
+- **Return Type Validation:** The `@monk` decorator now automatically validates function return values! If a function's return type hint includes `Annotated` constraints (e.g., `-> Annotated[str, LowerCase]`), `iron-monk` will safely intercept and validate the output before returning it to the caller. This works for both synchronous and asynchronous functions.
+
 ## [0.7.0]
 
 ### Added
