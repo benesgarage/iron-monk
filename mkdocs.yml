@@ -49,3 +49,4 @@ nav:
         - Beartype: examples/beartype.md
       - Data & ORMs:
         - SQLAlchemy 2.0: examples/sqlalchemy.md
+        - Tortoise ORM: examples/tortoise_orm.md
