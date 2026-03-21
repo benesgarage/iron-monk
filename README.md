@@ -69,9 +69,9 @@ print(user.email) # "test@domain.com"
 ## Core Philosophy
 
 The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is built for a completely different philosophy:
-- 🎯 **Do one thing well**: Unlike libraries that parse, coerce, and serialize, we focus strictly on validation.
+- 🎯 **Do one thing well**: Unlike libraries that parse, coerce, and serialize, we focus on validation.
 - 🪶 **Zero Dependencies:** Pure Python. No compiled binaries or bloated environments.
-- 🛡️ **Zero Coercion**: We don't secretly cast the string "123" into the integer 123. Your data is validated exactly as it is received.
+- 🛡️ **Zero Coercion**: We don't secretly cast the string "123" into the integer 123.
 - 🤝 **Agnostic to Type Checking:** We enforce *business constraints*, not base Python types.
 - ⏳ **Deferred Validation:** Capture bad data in a guarded state instead of crashing instantly.
 - 🧬 **Zero Inheritance:** No massive base classes polluting your namespace. Just a decorator.

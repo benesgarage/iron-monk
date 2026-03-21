@@ -25,9 +25,9 @@ To validate those three fields, developers are currently installing libraries th
 
 `iron-monk` was built to provide a clean, explicitly-typed alternative:
 
-- 🎯 **Do one thing well**: Unlike libraries that parse, coerce, and serialize, we focus strictly on validation.
+- 🎯 **Do one thing well**: Unlike libraries that parse, coerce, and serialize, we focus on validation.
 - 🪶 **Zero Dependencies:** Pure Python. No compiled binaries or bloated environments.
-- 🛡️ **Zero Coercion**: We don't secretly cast the string "123" into the integer 123. Your data is validated exactly as it is received.
+- 🛡️ **Zero Coercion**: We don't secretly cast the string "123" into the integer 123.
 - 🤝 **Agnostic to Type Checking:** We enforce *business constraints*, not base Python types.
 - ⏳ **Deferred Validation:** Capture bad data in a guarded state instead of crashing instantly.
 - 🧬 **Zero Inheritance:** No massive base classes polluting your namespace. Just a decorator.
