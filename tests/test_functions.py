@@ -1,7 +1,7 @@
 import pytest
-from typing import Annotated
+from typing import Annotated, Iterator
 from monk import monk
-from monk.constraints import Email, Interval, Len, Nullable, LowerCase
+from monk.constraints import Email, Interval, Len, Nullable, LowerCase, Each
 from monk.exceptions import ValidationError
 
 
@@ -120,3 +120,16 @@ async def test_async_function_return_validation() -> None:
 
     assert exc.value.errors[0]["field"] == "return"
     assert exc.value.errors[0]["code"] == "Len"
+
+
+def test_function_generator_consumption_protection() -> None:
+    @monk
+    def process_stream(stream: Annotated[Iterator[str], Each(LowerCase)]) -> list[str]:
+        return list(stream)
+
+    gen = (x for x in ["a", "b"])
+
+    with pytest.raises(ValidationError) as exc:
+        process_stream(gen)
+
+    assert "Cannot validate exhaustible iterator" in exc.value.errors[0]["message"]

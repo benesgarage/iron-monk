@@ -52,6 +52,37 @@ Email().validate(123)
 # TypeError: Type 'int' cannot be validated as an email.
 ```
 
+## Validating Generators and Streams
+
+> 🚧 We are actively exploring dedicated utilities (like a validate_stream wrapper) for a future release to support explicit, on-the-fly generator validation without forcing list materialization!
+
+Constraints that need to inspect multiple items in a collection (like `Each`, `Contains`, and `Unique`) natively reject exhaustible iterators (like generators and streams) and will raise a `TypeError`.
+
+If `iron-monk` were to silently evaluate a generator during validation, it would completely exhaust the stream. By the time the validation finished, your application would be left with an empty iterator, leading to notoriously difficult-to-debug "silent consumption" bugs.
+
+Alternatively, if the framework magically replaced your argument with a lazy proxy generator, it would strip away the original type of any custom stream objects you passed (like a `WebSocket` or a `FileStream`), directly violating our **Zero Coercion** philosophy.
+
+To validate a generator, you must explicitly materialize it into a `list` or `tuple` first, ensuring your application retains access to the data:
+
+```python
+from typing import Annotated
+from monk import monk
+from monk.constraints import Each, Email
+
+@monk
+def process_stream(stream: Annotated[list[str], Each(Email)]):
+    for item in stream:
+        print(item)
+
+# ❌ Fails: iron-monk refuses to silently consume the generator
+process_stream((x for x in ["test@domain.com", "admin@domain.com"]))
+
+# ✅ Works: Explicitly materialize it first so data isn't lost
+process_stream(list(x for x in ["test@domain.com", "admin@domain.com"]))
+```
+
+> Note: If you are processing massive or infinite streams where materializing to a `list` is impossible, you should validate the chunks iteratively inside your loop using Direct Execution or `validate_dict`.
+
 ## Custom Error Messages
 Every built-in constraint supports an optional `message` argument. `iron-monk` uses string formatting to allow you to dynamically inject the invalid `{value}` or constraint parameters.
 

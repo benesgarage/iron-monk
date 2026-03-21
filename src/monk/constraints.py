@@ -4,7 +4,7 @@ import math
 import re
 import uuid
 import pathlib
-from collections.abc import Iterable, Sized
+from collections.abc import Iterable, Sized, Iterator
 from dataclasses import field
 from typing import Any, Callable, Annotated, cast
 from urllib.parse import urlparse
@@ -254,6 +254,10 @@ class Each:
     def validate(self, value: Any) -> None:
         if not isinstance(value, Iterable):
             raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
+        if isinstance(value, Iterator):
+            raise TypeError(
+                f"Cannot validate exhaustible iterator '{type(value).__name__}'. Convert to a list/tuple first."
+            )
 
         errors: list[ErrorDict] = []
         for i, item in enumerate(value):
@@ -290,6 +294,11 @@ class Contains:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
+        if isinstance(value, Iterator):
+            raise TypeError(
+                f"Cannot validate exhaustible iterator '{type(value).__name__}'. Convert to a list/tuple first."
+            )
+
         try:
             if self.item not in value:
                 raise ValueError(f"Must contain {repr(self.item)}.")
@@ -307,6 +316,10 @@ class Unique:
     def validate(self, value: Any) -> None:
         if not isinstance(value, Iterable):
             raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
+        if isinstance(value, Iterator):
+            raise TypeError(
+                f"Cannot validate exhaustible iterator '{type(value).__name__}'. Convert to a list/tuple first."
+            )
 
         # Convert to a sized collection to safely check length and handle exhaustible iterators
         if not isinstance(value, Sized):

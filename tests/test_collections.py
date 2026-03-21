@@ -1,6 +1,7 @@
 import pytest
 from dataclasses import field
-from typing import Annotated
+from typing import Annotated, Iterator
+
 from monk import monk, validate
 from monk.exceptions import ValidationError
 from monk.constraints import Each, Len, LowerCase, Email, Unique, Contains, OneOf, MultipleOf, Nullable, NotNull
@@ -90,11 +91,34 @@ def test_unique_type_error() -> None:
         Unique().validate(123)
 
 
-def test_unique_generator_conversion() -> None:
-    # Prove that passing an exhaustible generator safely converts to a tuple internally
-    Unique().validate((x for x in [1, 2, 3]))
+def test_unique_non_sized_iterable() -> None:
+    """Tests that a re-usable Iterable without __len__ is safely converted to a tuple."""
+
+    class ReusableIterable:
+        def __init__(self, data: list[int]):
+            self.data = data
+
+        def __iter__(self) -> Iterator[int]:
+            for item in self.data:
+                yield item
+
+    # Not an Iterator, not Sized, but IS an Iterable!
+    Unique().validate(ReusableIterable([1, 2, 3]))
+
     with pytest.raises(ValueError):
-        Unique().validate((x for x in [1, 1]))
+        Unique().validate(ReusableIterable([1, 1]))
+
+
+def test_exhaustible_iterator_rejection() -> None:
+    """Ensure constraints that iterate over values refuse to silently consume generators."""
+    gen = (x for x in [1, 2, 3])
+
+    with pytest.raises(TypeError, match="Cannot validate exhaustible iterator"):
+        Each(LowerCase).validate(gen)
+    with pytest.raises(TypeError, match="Cannot validate exhaustible iterator"):
+        Contains(2).validate(gen)
+    with pytest.raises(TypeError, match="Cannot validate exhaustible iterator"):
+        Unique().validate(gen)
 
 
 def test_one_of_constraint_success() -> None:
