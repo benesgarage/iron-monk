@@ -33,8 +33,9 @@ When validation fails, `iron-monk` raises a `ValidationError`. This exception co
 
 You can extract these errors in two ways depending on your use case:
 
-1. **Structured Data (`e.errors`)**: Returns a `list` of `ErrorDict` objects (a `TypedDict` containing `field`, `message`, and `code`).
-2. **Flattened Strings (`e.flatten()`)**: Returns a `list` of formatted `{field}: {message}` strings. This is useful for CLI tools, console printouts, or basic application logging.
+1. **Structured Data (`e.errors`)**: Returns a `list` of dictionaries containing the `field`, `message`, and `code`.
+2. **RFC 7807 Enterprise Errors (`e.to_rfc7807()`)**: Returns a standard RFC 7807 Problem Details JSON dictionary. Perfect for REST APIs!
+3. **Flattened Strings (`e.flatten()`)**: Returns a `list` of `{field}: {message}` strings. Perfect for CLI printouts or basic logging.
 
 ```python
 from typing import Annotated
@@ -57,7 +58,11 @@ except ValidationError as e:
     print(e.errors[0]["field"]) # "email"
     print(e.errors[0]["message"])  # "Must be a valid email address."
     
-    # 2. Flattened Strings
+    # 2. RFC 7807 
+    print(e.to_rfc7807(instance="/api/users/update"))
+    # {"type": "about:blank", "title": "Validation Error", "status": 400, "detail": "...", "instance": "/api/users/update", "errors": [...]}
+    
+    # 3. Flattened Strings
     print(e.flatten())
     # [
     #   "email: Must be a valid email address.", 

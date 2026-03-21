@@ -297,6 +297,20 @@ def test_validation_error_flatten() -> None:
         assert e.flatten() == ["age: Must be greater than or equal to 18."]
 
 
+def test_validation_error_rfc7807() -> None:
+    @monk
+    class TestModel:
+        age: Annotated[int, Interval(ge=18)]
+
+    try:
+        validate(TestModel(age=12))
+    except ValidationError as e:
+        rfc = e.to_rfc7807(instance="/api/users")
+        assert rfc["status"] == 400
+        assert rfc["instance"] == "/api/users"
+        assert rfc["errors"][0]["field"] == "age"
+
+
 def test_custom_error_codes() -> None:
     @monk
     class ErrorCodeModel:

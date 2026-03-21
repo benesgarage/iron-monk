@@ -1,3 +1,4 @@
+from typing import Any
 from .types import ErrorDict
 
 
@@ -21,3 +22,24 @@ class ValidationError(Exception):
     def flatten(self) -> list[str]:
         """Returns a flat list of formatted error strings."""
         return [f"{err['field']}: {err['message']}" for err in self.errors]
+
+    def to_rfc7807(
+        self,
+        status: int = 400,
+        title: str = "Validation Error",
+        type_uri: str = "about:blank",
+        detail: str = "The provided data is invalid. See 'errors' for specific details.",
+        instance: str | None = None,
+    ) -> dict[str, Any]:
+        """Formats the errors into an RFC 7807 compliant dictionary for HTTP APIs."""
+        payload: dict[str, Any] = {
+            "type": type_uri,
+            "title": title,
+            "status": status,
+            "detail": detail,
+            "errors": self.errors,
+        }
+        if instance is not None:
+            payload["instance"] = instance
+
+        return payload
