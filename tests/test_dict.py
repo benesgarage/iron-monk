@@ -2,7 +2,7 @@ import pytest
 from typing import TypedDict, Annotated
 from monk import monk, validate_dict
 from monk.exceptions import ValidationError
-from monk.constraints import Email, Interval, Nullable
+from monk.constraints import Email, Interval, Nullable, Nested, Each, Len
 
 
 def test_typeddict_validation() -> None:
@@ -55,3 +55,41 @@ def test_partial_validation_with_dataclass() -> None:
     with pytest.raises(ValidationError) as exc:
         validate_dict({"email": None}, PatchUser, partial=True)
     assert exc.value.errors[0]["code"] == "NotNull"
+
+
+def test_nested_dict_validation() -> None:
+    class AddressDict(TypedDict):
+        city: Annotated[str, Len(min_len=2)]
+
+    class DeepUserDict(TypedDict):
+        email: Annotated[str, Email]
+        address: Annotated[AddressDict, Nested(AddressDict)]
+        history: Annotated[list[AddressDict], Each(Nested(AddressDict))]
+
+    # 1. Success
+    valid = {
+        "email": "test@domain.com",
+        "address": {"city": "New York"},
+        "history": [{"city": "Los Angeles"}, {"city": "Chicago"}],
+    }
+    assert validate_dict(valid, DeepUserDict) == valid
+
+    # 2. Deep Failure Path formatting
+    invalid = {"email": "bad", "address": {"city": "N"}, "history": [{"city": "L"}, {"city": "C"}]}
+
+    with pytest.raises(ValidationError) as exc:
+        validate_dict(invalid, DeepUserDict)
+
+    errors = exc.value.errors
+    assert errors[0]["field"] == "email"
+    assert errors[1]["field"] == "address.city"
+    assert errors[2]["field"] == "history[0].city"
+    assert errors[3]["field"] == "history[1].city"
+
+    # 3. Passing a non-dictionary to a Nested constraint
+    invalid_type = {"email": "test@domain.com", "address": 123, "history": []}
+    with pytest.raises(ValidationError) as exc:
+        validate_dict(invalid_type, DeepUserDict)
+
+    assert exc.value.errors[0]["field"] == "address"
+    assert "is not a dictionary" in exc.value.errors[0]["message"]

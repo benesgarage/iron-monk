@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0]
+
+### Added
+- **Deeply Nested Dictionary Validation:** Added the `Nested` constraint, bridging the gap for validating deep JSON architectures (like lists of nested dictionaries) using `validate_dict`. This allows developers to validate infinitely complex `TypedDict` trees without instantiating a single object.
+
 ## [0.12.0]
 
 ### Added

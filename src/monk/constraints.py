@@ -364,6 +364,33 @@ class Each:
 
 
 @constraint
+class Nested:
+    """Validates a nested dictionary against a TypedDict or Dataclass schema."""
+
+    schema: type
+    partial: bool = False
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, dict):
+            raise TypeError(f"Type '{type(value).__name__}' is not a dictionary.")
+
+        # Local import prevents circular dependencies with operations.py
+        from .operations import validate_dict
+
+        try:
+            validate_dict(value, self.schema, partial=self.partial)
+        except ValidationError as e:
+            # Adjust the error paths so they concatenate via dot-notation
+            for err in e.errors:
+                field = err.get("field", "")
+                if field and not field.startswith("["):
+                    err["field"] = f".{field}"
+            raise
+
+
+@constraint
 class Contains:
     """Validates that a collection or string contains a specific item/substring."""
 

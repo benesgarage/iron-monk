@@ -57,10 +57,13 @@ class NumericConstraints:
 ## Collections
 
 ```python
-from typing import Annotated
+from typing import Annotated, TypedDict
 
 from monk import monk
-from monk.constraints import Each, LowerCase, Len, OneOf, Unique, Contains
+from monk.constraints import Each, LowerCase, Len, OneOf, Unique, Contains, Nested
+
+class AddressDict(TypedDict):
+    city: str
 
 @monk
 class CollectionConstraints:
@@ -78,6 +81,9 @@ class CollectionConstraints:
     
     # Recursively applies constraints to every item in an iterable
     emails: Annotated[list[str], Each(LowerCase, Len(min_len=5))]
+    
+    # Validates a nested raw dictionary against another schema
+    address: Annotated[AddressDict, Nested(AddressDict)]
 ```
 
 ## Format & Network

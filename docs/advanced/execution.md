@@ -140,3 +140,32 @@ process_data(gen)
 ```
 
 > If you are working with async iterators (like streaming database records or ASGI receivers), simply use `validate_async_stream` instead!
+ 
+
+## Deeply Nested Dictionaries
+
+If your JSON payload is heavily nested, use the `Nested` constraint. This acts as a bridge, allowing the engine to recursively validate complex JSON architectures without instantiating any objects.
+
+```python
+from typing import TypedDict, Annotated
+from monk import validate_dict
+from monk.constraints import Email, Len, Each, Nested
+
+class AddressDict(TypedDict):
+    city: Annotated[str, Len(min_len=2)]
+
+class UserDict(TypedDict):
+    email: Annotated[str, Email]
+    # Use the nested schema as the base type for perfect MyPy/IDE autocomplete!
+    address: Annotated[AddressDict, Nested(AddressDict)]
+    history: Annotated[list[AddressDict], Each(Nested(AddressDict))]
+    
+payload = {
+    "email": "bad",
+    "address": {"city": "A"},
+    "history": [{"city": "B"}]
+}
+
+validate_dict(payload, UserDict)
+# ❌ raises: ['email: Must be a valid email address.', 'address.city: Must have a minimum length of 2.', 'history[0].city: Must have a minimum length of 2.']
+```
