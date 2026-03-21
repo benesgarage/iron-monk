@@ -4,14 +4,16 @@
   </a>
   <h1 style="margin-top: 0; padding-top: 0;">iron-monk</h1>
   <h4>A minimalist, zero-coercion validation library for Python.</h4>
-</div>
 
-[![CI/CD](https://img.shields.io/github/actions/workflow/status/benesgarage/iron-monk/ci.yml?branch=main&label=CI)](https://github.com/benesgarage/iron-monk/actions)
-[![PyPI version](https://img.shields.io/pypi/v/iron-monk.svg?color=black)](https://pypi.org/project/iron-monk/)
-[![Python Versions](https://img.shields.io/pypi/pyversions/iron-monk.svg?color=black)](https://pypi.org/project/iron-monk/)
-[![License](https://img.shields.io/github/license/benesgarage/iron-monk?color=black)](https://github.com/benesgarage/iron-monk/blob/main/LICENSE)
-[![Coverage: 100%](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg?color=black)]()
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-success.svg?color=black)]()
+  <p>
+    <a href="https://pypi.org/project/iron-monk/"><img src="https://img.shields.io/pypi/v/iron-monk.svg?color=black" alt="PyPI version"></a>
+    <a href="https://pypi.org/project/iron-monk/"><img src="https://img.shields.io/pypi/pyversions/iron-monk.svg?color=black" alt="Python Versions"></a>
+    <a href="https://github.com/benesgarage/iron-monk/actions"><img src="https://img.shields.io/github/actions/workflow/status/benesgarage/iron-monk/ci.yml?branch=main&label=CI" alt="CI/CD"></a>
+    <img src="https://img.shields.io/badge/Coverage-100%25-brightgreen.svg?color=black" alt="Coverage: 100%">
+    <img src="https://img.shields.io/badge/Dependencies-0-success.svg?color=black" alt="Zero Dependencies">
+    <a href="https://github.com/benesgarage/iron-monk/blob/main/LICENSE"><img src="https://img.shields.io/github/license/benesgarage/iron-monk?color=black" alt="License"></a>
+  </p>
+</div>
 
 ---
 
