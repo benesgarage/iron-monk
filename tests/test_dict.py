@@ -95,6 +95,37 @@ def test_nested_dict_validation() -> None:
     assert "is not a dictionary" in exc.value.errors[0]["message"]
 
 
+class Node(TypedDict):
+    id: Annotated[int, Interval(ge=1)]
+    # Recursive reference using a lambda!
+    children: Annotated[list["Node"], Each(Nested(lambda: Node))]
+
+
+def test_recursive_nested_dict_validation() -> None:
+
+    # 1. Success
+    valid = {"id": 1, "children": [{"id": 2, "children": []}, {"id": 3, "children": [{"id": 4, "children": []}]}]}
+    assert validate_dict(valid, Node) == valid
+
+    # 2. Deep Failure Path mapping
+    invalid = {
+        "id": 1,
+        "children": [
+            {"id": 2, "children": []},
+            {"id": 3, "children": [{"id": 0, "children": []}]},  # 0 fails the Interval(ge=1) constraint
+        ],
+    }
+    with pytest.raises(ValidationError) as exc:
+        validate_dict(invalid, Node)
+
+    assert exc.value.errors[0]["field"] == "children[1].children[0].id"
+    assert exc.value.errors[0]["code"] == "Interval"
+
+    # 3. DX: String forward reference rejection
+    with pytest.raises(TypeError, match="String forward references"):
+        Nested("Node").validate({})
+
+
 def test_strict_dictionary_validation() -> None:
     class StrictSchema(TypedDict):
         name: str

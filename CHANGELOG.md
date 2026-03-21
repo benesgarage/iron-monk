@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0]
+
+### Added
+- **Recursive Schemas:** The `Nested` constraint now accepts a `lambda` (e.g., `Nested(lambda: MySchema)`), enabling the validation of recursive and self-referencing JSON dictionary structures (like file trees or comment threads) without breaking Python's sequential execution or relying on heavy string-evaluation magic.
+
 ## [0.14.0]
 
 ### Added

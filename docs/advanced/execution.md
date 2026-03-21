@@ -199,3 +199,57 @@ payload = {
 validate_dict(payload, UserDict)
 # ❌ raises: ['email: Must be a valid email address.', 'address.city: Must have a minimum length of 2.', 'history[0].city: Must have a minimum length of 2.']
 ```
+
+## Recursive Schemas
+
+If you are building tree structures (like a file directory or a comment section), a schema might need to contain a `list` of itself. 
+
+### With Raw Dictionaries (TypedDict)
+
+At runtime, `iron-monk` needs the actual `class` to validate a nested dictionary. You can natively achieve this by passing a lazy lambda to the `Nested` constraint:
+
+```python
+from typing import TypedDict, Annotated
+from monk import validate_dict
+from monk.constraints import Len, Each, Nested
+
+class Comment(TypedDict):
+    text: Annotated[str, Len(min_len=1)]
+    # Use a lambda to evaluate the schema lazily at runtime!
+    replies: Annotated[list["Comment"], Each(Nested(lambda: Comment))]
+
+payload = {
+    "text": "First!",
+    "replies": [
+        {
+            "text": "Second!",
+            "replies": [{"text": "", "replies": []}] # ❌ Fails: text is empty!
+        }
+    ]
+}
+
+validate_dict(payload, Comment)
+# ValidationError: ['replies[0].replies[0].text: Must have a minimum length of 1.']
+```
+
+### With Dataclasses (@monk)
+
+Because the core engine automatically detects and recurses into nested `@monk` objects, recursive dataclasses require absolutely zero boilerplate. You don't need `Nested` or `lambda`. You just use standard Python string forward references, and the engine handles the rest!
+
+```python
+from typing import Annotated
+from monk import monk, validate
+from monk.constraints import Interval
+
+@monk
+class Node:
+    id: Annotated[int, Interval(ge=1)]
+    
+    # That's it! No Nested, no Each, no lambda.
+    children: list["Node"]
+
+root = Node(id=1, children=[Node(id=0, children=[])]) # ❌ Fails Interval(ge=1)!
+
+validate(root) 
+# ValidationError: ['children[0].id: Must be greater than or equal to 1.']
+```

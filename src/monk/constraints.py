@@ -367,7 +367,7 @@ class Each:
 class Nested:
     """Validates a nested dictionary against a TypedDict or Dataclass schema."""
 
-    schema: type
+    schema: Any  # type | Callable[[], type]
     partial: bool = False
     message: str | None = None
     code: str | None = None
@@ -376,11 +376,21 @@ class Nested:
         if not isinstance(value, dict):
             raise TypeError(f"Type '{type(value).__name__}' is not a dictionary.")
 
+        # Resolve lazy schemas (for recursive/self-referencing types)
+        actual_schema = self.schema
+        if isinstance(actual_schema, str):
+            raise TypeError(
+                f"String forward references ('{actual_schema}') are not supported in Nested. "
+                f"Use a lambda for recursive schemas: `Nested(lambda: {actual_schema})`."
+            )
+        if callable(actual_schema) and not isinstance(actual_schema, type):
+            actual_schema = actual_schema()
+
         # Local import prevents circular dependencies with operations.py
         from .operations import validate_dict
 
         try:
-            validate_dict(value, self.schema, partial=self.partial)
+            validate_dict(value, actual_schema, partial=self.partial)
         except ValidationError as e:
             # Adjust the error paths so they concatenate via dot-notation
             for err in e.errors:
