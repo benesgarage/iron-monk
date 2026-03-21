@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1]
+
+### Fixed
+- **Framework Interoperability:** Relaxed the `__getattribute__` guard to natively allow access to internal single-underscore variables (e.g., `_sa_instance_state`), fixing compatibility with SQLAlchemy's `MappedAsDataclass` and other instrumentation tools.
+- **Generic Unwrapping:** The constraint extraction engine now intelligently peeks inside framework-specific generic wrappers (like SQLAlchemy's `Mapped[...]`) to find nested `Annotated` constraints.
+- **Type Checker Signatures:** Shifted the deferred validation trigger from overriding `__init__` to injecting a `__post_init__` hook. This flawlessly preserves the dataclass's original `__init__` signature, allowing zero-friction integration with runtime type checkers like `beartype`.
+
+### Added
+- **Documentation:** Added real-world examples for `beartype` and `SQLAlchemy 2.0` integrations.
+
 ## [0.6.0]
 
 ### Added

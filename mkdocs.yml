@@ -39,7 +39,13 @@ nav:
   - Advanced Usage: advanced.md
   - Real-World Examples:
       - Overview: examples.md
-      - App Configuration: examples/app_config.md
-      - Starlette (ASGI): examples/starlette.md
-      - Strawberry GraphQL: examples/strawberry.md
-      - tyro (CLI tool): examples/tyro.md
+      - Web & API:
+        - Strawberry GraphQL: examples/strawberry.md
+        - Starlette (ASGI): examples/starlette.md
+      - Config & CLI:
+        - App Configuration: examples/app_config.md
+        - tyro (CLI tool): examples/tyro.md
+      - Typing & Ecosystem:
+        - Beartype: examples/beartype.md
+      - Data & ORMs:
+        - SQLAlchemy 2.0: examples/sqlalchemy.md

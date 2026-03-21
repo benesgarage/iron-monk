@@ -1,7 +1,8 @@
 import dataclasses
 import functools
 import inspect
-from typing import get_type_hints, TypeVar, dataclass_transform, Callable, Any, overload
+from typing import get_type_hints, TypeVar, dataclass_transform, Callable, Any, overload, get_origin, get_args
+
 from .protocols import MonkConstraint
 from .operations import validate
 from .config import settings
@@ -87,6 +88,19 @@ def monk(
             dataclasses.field(default=False, init=False, repr=False, compare=False, hash=False),
         )
 
+        orig_post_init = getattr(original_cls, "__post_init__", None)
+
+        def __post_init__(self: Any, *args: Any, **kwargs: Any) -> None:
+            if orig_post_init is not None:
+                orig_post_init(self, *args, **kwargs)
+
+            # Explicit kwarg overrides global config
+            should_defer = defer if defer is not None else settings.defer
+            if not should_defer:
+                validate(self)
+
+        setattr(original_cls, "__post_init__", __post_init__)
+
         # 1. Convert to a standard dataclass
         d_cls = dataclasses.dataclass(original_cls, **dataclass_kwargs)
 
@@ -105,6 +119,15 @@ def monk(
         for name, hint in hints.items():
             # Look for our specific MonkConstraint in Annotated metadata
             metadata = getattr(hint, "__metadata__", [])
+
+            # Support framework wrappers (like SQLAlchemy's Mapped[Annotated[...]])
+            if not metadata:
+                args = get_args(hint)
+                origin = get_origin(hint)
+                # Only unwrap if it's not a standard collection (collections use Each constraint)
+                if args and origin not in (list, set, frozenset, tuple, dict):
+                    metadata = getattr(args[0], "__metadata__", [])
+
             field_rules = []
             for m in metadata:
                 # Auto-instantiate classes that implement the protocol but were passed as a type
@@ -123,25 +146,9 @@ def monk(
 
         setattr(d_cls, "__monk_rules__", rules)
 
-        # Ensure every new instance starts in a guarded/unvalidated state
-        orig_init = d_cls.__init__
-
-        @functools.wraps(orig_init)
-        def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
-            kwargs.pop("__monk_safe__", None)  # Shield against aggressive external instantiators
-            object.__setattr__(self, "__monk_safe__", False)
-            orig_init(self, *args, **kwargs)
-
-            # Explicit kwarg overrides global config
-            should_defer = defer if defer is not None else settings.defer
-            if not should_defer:
-                validate(self)
-
-        setattr(d_cls, "__init__", __init__)
-
         # Overwrite __getattribute__ to guard the dataclass until validated
         def __getattribute__(self: Any, name: str) -> Any:
-            if name in ("__monk_safe__", "validate") or name.startswith("__"):
+            if name == "validate" or name.startswith("_"):
                 return object.__getattribute__(self, name)
 
             if not object.__getattribute__(self, "__monk_safe__"):

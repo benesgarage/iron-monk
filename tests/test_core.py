@@ -1,7 +1,7 @@
 import pytest
 import datetime
 import importlib
-from typing import Annotated, Any
+from typing import Annotated, Any, Generic, TypeVar
 
 from monk import monk, validate, settings, constraint
 from monk.exceptions import UnvalidatedAccessError, ValidationError
@@ -297,3 +297,32 @@ def test_not_null_custom_message_and_code() -> None:
     assert errors[0]["field"] == "email"
     assert errors[0]["message"] == "We really need your email!"
     assert errors[0]["code"] == "MISSING_EMAIL"
+
+
+def test_custom_post_init() -> None:
+    @monk
+    class PostInitModel:
+        name: str
+
+        def __post_init__(self) -> None:
+            object.__setattr__(self, "custom_init_run", True)
+
+    model = PostInitModel(name="test")
+    assert object.__getattribute__(model, "custom_init_run") is True
+
+
+def test_framework_wrapper_unwrapping() -> None:
+    """Simulates SQLAlchemy's Mapped wrapper to ensure we extract inner constraints."""
+    T_Wrap = TypeVar("T_Wrap")
+
+    class Box(Generic[T_Wrap]):
+        pass
+
+    @monk
+    class WrappedModel:
+        email: Box[Annotated[str, Email]]
+
+    with pytest.raises(ValidationError) as exc:
+        validate(WrappedModel(email="bad-email"))  # type: ignore
+
+    assert exc.value.errors[0]["code"] == "Email"
