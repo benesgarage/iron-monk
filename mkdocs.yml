@@ -31,3 +31,15 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Core Concepts: core_concepts.md
+  - The Constraint Toolkit: constraints.md
+  - Advanced Usage: advanced.md
+  - Real-World Examples:
+      - Overview: examples.md
+      - App Configuration: examples/app_config.md
+      - Starlette (ASGI): examples/starlette.md
+      - Strawberry GraphQL: examples/strawberry.md
+      - tyro (CLI tool): examples/tyro.md

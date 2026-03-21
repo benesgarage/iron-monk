@@ -87,7 +87,7 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
 ## Core Concepts
 Understand the validation lifecycle, how to cleanly extract error dictionaries, and how to enforce required fields.
 
-👉 [**Read the Core Concepts Guide &rarr;**](docs/core_concepts.md)
+👉 [**Read the Core Concepts Guide &rarr;**](https://benesgarage.github.io/iron-monk/core_concepts/)
 
 ## The Toolkit
 **Batteries included**. `iron-monk` comes with a comprehensive suite of built-in constraints. From networking (`Email`, `URL`, `IPAddress`) to collections (`Each`, `Unique`) and logic (`Not`, `Predicate`), you will rarely need to write your own rules.
