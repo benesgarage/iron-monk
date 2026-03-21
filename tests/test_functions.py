@@ -132,4 +132,4 @@ def test_function_generator_consumption_protection() -> None:
     with pytest.raises(ValidationError) as exc:
         process_stream(gen)
 
-    assert "Cannot validate exhaustible iterator" in exc.value.errors[0]["message"]
+    assert "Cannot eagerly validate exhaustible iterator" in exc.value.errors[0]["message"]

@@ -256,7 +256,7 @@ class Each:
             raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
         if isinstance(value, Iterator):
             raise TypeError(
-                f"Cannot validate exhaustible iterator '{type(value).__name__}'. Convert to a list/tuple first."
+                f"Cannot eagerly validate exhaustible iterator '{type(value).__name__}'. Use 'validate_stream()' for lazy validation, or convert to a list/tuple first."
             )
 
         errors: list[ErrorDict] = []
@@ -296,7 +296,7 @@ class Contains:
     def validate(self, value: Any) -> None:
         if isinstance(value, Iterator):
             raise TypeError(
-                f"Cannot validate exhaustible iterator '{type(value).__name__}'. Convert to a list/tuple first."
+                f"Cannot eagerly validate exhaustible iterator '{type(value).__name__}'. Use 'validate_stream()' for lazy validation, or convert to a list/tuple first."
             )
 
         try:
@@ -318,7 +318,7 @@ class Unique:
             raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
         if isinstance(value, Iterator):
             raise TypeError(
-                f"Cannot validate exhaustible iterator '{type(value).__name__}'. Convert to a list/tuple first."
+                f"Cannot eagerly validate exhaustible iterator '{type(value).__name__}'. Use 'validate_stream()' for lazy validation, or convert to a list/tuple first."
             )
 
         # Convert to a sized collection to safely check length and handle exhaustible iterators

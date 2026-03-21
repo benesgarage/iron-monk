@@ -54,34 +54,38 @@ Email().validate(123)
 
 ## Validating Generators and Streams
 
-> 🚧 We are actively exploring dedicated utilities (like a validate_stream wrapper) for a future release to support explicit, on-the-fly generator validation without forcing list materialization!
+Constraints that need to inspect multiple items in a collection (like `Each`, `Contains`, and `Unique`) natively **reject exhaustible iterators** (streams) and will raise a `TypeError`.
 
-Constraints that need to inspect multiple items in a collection (like `Each`, `Contains`, and `Unique`) natively reject exhaustible iterators (like generators and streams) and will raise a `TypeError`.
+If `iron-monk` were to silently evaluate a generator during validation, due to our eager validation, it would exhaust. By the time the validation finished, your application would be left with an empty iterator.
 
-If `iron-monk` were to silently evaluate a generator during validation, it would completely exhaust the stream. By the time the validation finished, your application would be left with an empty iterator, leading to notoriously difficult-to-debug "silent consumption" bugs.
+If we were to magically replace your argument with a lazy proxy generator, it would strip away the original type of any custom stream objects you passed (like a `WebSocket` or a `FileStream`), directly violating our **Zero Coercion** philosophy.
 
-Alternatively, if the framework magically replaced your argument with a lazy proxy generator, it would strip away the original type of any custom stream objects you passed (like a `WebSocket` or a `FileStream`), directly violating our **Zero Coercion** philosophy.
+### Lazy Stream Validation
+To safely validate infinite streams, massive files, or WebSockets without blowing up your memory by converting them to a list, `iron-monk` provides `validate_stream` and `validate_async_stream`.
 
-To validate a generator, you must explicitly materialize it into a `list` or `tuple` first, ensuring your application retains access to the data:
+These utilities act as explicit proxies. You wrap your generator right where you consume it, and it validates items one-by-one on the fly. If an invalid item pops out, it instantly raises a `ValidationError` before your application processes it.
 
 ```python
-from typing import Annotated
-from monk import monk
-from monk.constraints import Each, Email
+from typing import Iterator
+from monk import validate_stream
+from monk.constraints import Email, EndsWith
 
-@monk
-def process_stream(stream: Annotated[list[str], Each(Email)]):
-    for item in stream:
-        print(item)
+def process_data(stream: Iterator[str]):
+    # Validate items lazily, passing multiple constraints as arguments
+    safe_stream = validate_stream(stream, Email, EndsWith("@domain.com"))
+    
+    for item in safe_stream:
+        print(f"Safe to process: {item}")
 
-# ❌ Fails: iron-monk refuses to silently consume the generator
-process_stream((x for x in ["test@domain.com", "admin@domain.com"]))
+gen = (x for x in ["test@domain.com", "hacker@evil.com"])
 
-# ✅ Works: Explicitly materialize it first so data isn't lost
-process_stream(list(x for x in ["test@domain.com", "admin@domain.com"]))
+process_data(gen)
+# Output:
+# Safe to process: test@domain.com
+# ❌ raises ValidationError: ["[1]: Must end with '@domain.com'"]
 ```
 
-> Note: If you are processing massive or infinite streams where materializing to a `list` is impossible, you should validate the chunks iteratively inside your loop using Direct Execution or `validate_dict`.
+> If you are working with async iterators (like streaming database records or ASGI receivers), simply use `validate_async_stream` instead!
 
 ## Custom Error Messages
 Every built-in constraint supports an optional `message` argument. `iron-monk` uses string formatting to allow you to dynamically inject the invalid `{value}` or constraint parameters.

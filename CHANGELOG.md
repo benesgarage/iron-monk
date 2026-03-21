@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0]
+
+### Added
+- **Stream and Generator Validation:** Added `validate_stream` and `validate_async_stream` utilities to explicitly and lazily validate streams on the fly. This prevents memory bloat by yielding and validating items one by one, instantly raising a `ValidationError` if an item violates your constraints.
+
 ## [0.9.1]
 
 ### Fixed

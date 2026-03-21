@@ -1,12 +1,40 @@
 import dataclasses
 import functools
-from typing import TypeVar, Any, cast, Iterable, get_origin, get_args, get_type_hints
+from typing import (
+    TypeVar,
+    Any,
+    cast,
+    Iterable,
+    AsyncIterable,
+    AsyncIterator,
+    Iterator,
+    get_origin,
+    get_args,
+    get_type_hints,
+)
 from .exceptions import ValidationError
 from .types import ErrorDict
 from .config import settings
 from .protocols import MonkConstraint
 
 T = TypeVar("T")
+
+
+def _prepare_constraints(constraints: Iterable[Any]) -> list[Any]:
+    """Takes raw constraints (classes or instances) and prepares them for execution."""
+    field_rules = []
+    for m in constraints:
+        # Auto-instantiate classes that implement the protocol but were passed as a type
+        if isinstance(m, type) and issubclass(m, MonkConstraint):
+            try:
+                field_rules.append(m())
+            except TypeError as e:
+                raise TypeError(
+                    f"Constraint '{m.__name__}' missing required arguments. Did you mean {m.__name__}(...)?"
+                ) from e
+        elif isinstance(m, MonkConstraint):
+            field_rules.append(m)
+    return field_rules
 
 
 def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, list[MonkConstraint]]:
@@ -25,19 +53,7 @@ def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, list[MonkConstrai
             if args and origin not in (list, set, frozenset, tuple, dict):
                 metadata = getattr(args[0], "__metadata__", [])
 
-        field_rules = []
-        for m in metadata:
-            # Auto-instantiate classes that implement the protocol but were passed as a type
-            if isinstance(m, type) and issubclass(m, MonkConstraint):
-                try:
-                    field_rules.append(m())
-                except TypeError as e:
-                    raise TypeError(
-                        f"Constraint '{m.__name__}' missing required arguments. Did you mean {m.__name__}(...)?"
-                    ) from e
-            elif isinstance(m, MonkConstraint):
-                field_rules.append(m)
-
+        field_rules = _prepare_constraints(metadata)
         if field_rules:
             rules[name] = field_rules
 
@@ -150,6 +166,38 @@ def validate_dict(data: dict[str, Any], schema: type) -> dict[str, Any]:
         raise ValidationError(errors)
 
     return data
+
+
+def validate_stream(stream: Iterable[Any], *constraints: Any) -> Iterator[Any]:
+    """
+    Lazily validates an iterable/generator on the fly without consuming it entirely.
+    Yields items one by one, raising a ValidationError if an item fails.
+    """
+    prepared = _prepare_constraints(constraints)
+
+    for i, item in enumerate(stream):
+        errors: list[ErrorDict] = []
+        _validate_field_and_recurse(f"[{i}]", item, prepared, errors)
+        if errors:
+            raise ValidationError(errors)
+        yield item
+
+
+async def validate_async_stream(stream: AsyncIterable[Any], *constraints: Any) -> AsyncIterator[Any]:
+    """
+    Lazily validates an async iterable/generator on the fly without consuming it entirely.
+    Yields items one by one, raising a ValidationError if an item fails.
+    """
+    prepared = _prepare_constraints(constraints)
+
+    i = 0
+    async for item in stream:
+        errors: list[ErrorDict] = []
+        _validate_field_and_recurse(f"[{i}]", item, prepared, errors)
+        if errors:
+            raise ValidationError(errors)
+        yield item
+        i += 1
 
 
 def validate(instance: T) -> T:

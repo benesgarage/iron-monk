@@ -113,11 +113,11 @@ def test_exhaustible_iterator_rejection() -> None:
     """Ensure constraints that iterate over values refuse to silently consume generators."""
     gen = (x for x in [1, 2, 3])
 
-    with pytest.raises(TypeError, match="Cannot validate exhaustible iterator"):
+    with pytest.raises(TypeError, match="Cannot eagerly validate exhaustible iterator"):
         Each(LowerCase).validate(gen)
-    with pytest.raises(TypeError, match="Cannot validate exhaustible iterator"):
+    with pytest.raises(TypeError, match="Cannot eagerly validate exhaustible iterator"):
         Contains(2).validate(gen)
-    with pytest.raises(TypeError, match="Cannot validate exhaustible iterator"):
+    with pytest.raises(TypeError, match="Cannot eagerly validate exhaustible iterator"):
         Unique().validate(gen)
 
 

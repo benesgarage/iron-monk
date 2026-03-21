@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iron-monk"
-version = "0.9.1"
+version = "0.10.0"
 description = "A minimalist, zero-coercion validation library for Python."
 readme = "README.md"
 authors = [
