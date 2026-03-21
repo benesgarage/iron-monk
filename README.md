@@ -3,7 +3,7 @@
     <img src="./docs/assets/monk.png" width="400" alt="iron-monk logo" style="display: block; margin-bottom: 0; padding-bottom: 0;">
   </a>
   <h1 style="margin-top: 0; padding-top: 0;">iron-monk</h1>
-  <h4>A minimalist, zero-coercion validation library for Python dataclasses.</h4>
+  <h4>A minimalist, zero-coercion validation library for Python.</h4>
 </div>
 
 [![CI/CD](https://img.shields.io/github/actions/workflow/status/benesgarage/iron-monk/ci.yml?branch=main&label=CI)](https://github.com/benesgarage/iron-monk/actions)

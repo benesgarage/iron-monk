@@ -1,5 +1,5 @@
 site_name: iron-monk
-site_description: A minimalist, strict validation library for Python dataclasses.
+site_description: A minimalist, zero-coercion validation library for Python.
 site_url: https://benesgarage.github.io/iron-monk/
 
 theme:

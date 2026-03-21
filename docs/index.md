@@ -3,7 +3,7 @@
   <h1>iron-monk</h1>
 </div>
 
-Welcome to the official documentation for **iron-monk**, a minimalist, zero-coercion validation library for Python dataclasses.
+Welcome to the official documentation for **iron-monk**, a minimalist, zero-coercion validation library for Python.
 
 ## The Philosophy
 The Python ecosystem is dominated by heavy validation frameworks. 
