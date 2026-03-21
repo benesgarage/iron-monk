@@ -410,3 +410,15 @@ def test_framework_wrapper_unwrapping() -> None:
 def test_invalid_monk_target() -> None:
     with pytest.raises(TypeError, match="Monk can only decorate classes or functions."):
         monk(123)  # type: ignore
+
+
+def test_async_validate_rejection() -> None:
+    @monk(defer=True)
+    class AsyncUser:
+        username: str
+
+        async def __monk_validate__(self) -> str | None:
+            return "bad"
+
+    with pytest.raises(TypeError, match="iron-monk is strictly synchronous"):
+        validate(AsyncUser(username="admin"))

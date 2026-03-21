@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0]
+
+### Added
+- **Partial Validation (PATCH Support):** Added the `partial=True` flag to `validate_dict()`. This allows developers to validate partial dictionary payloads against their existing `@monk` dataclasses by ignoring fields that are omitted.
+
+### Changed
+- **Architectural Guardrails:** The core engine now explicitly checks for and rejects asynchronous `__monk_validate__` hooks, raising a `TypeError`.
+- **Documentation:** Restructured the Advanced Usage documentation into a modular guide.
+
 ## [0.11.0]
 
 ### Added

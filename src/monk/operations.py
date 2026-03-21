@@ -1,5 +1,6 @@
 import dataclasses
 import functools
+import inspect
 from typing import (
     TypeVar,
     Any,
@@ -152,13 +153,16 @@ def _get_schema_rules(schema: type) -> dict[str, list[MonkConstraint]]:
     return _extract_monk_metadata(hints)
 
 
-def validate_dict(data: dict[str, Any], schema: type) -> dict[str, Any]:
-    """Validates a raw dictionary against a TypedDict schema without instantiating an object."""
+def validate_dict(data: dict[str, Any], schema: type, *, partial: bool = False) -> dict[str, Any]:
+    """Validates a raw dictionary against a TypedDict or Dataclass schema without instantiating an object."""
     rules = _get_schema_rules(schema)
     errors: list[ErrorDict] = []
 
     # We iterate over the SCHEMA rules to catch missing required fields
     for field_name, constraints in rules.items():
+        if partial and field_name not in data:
+            continue
+
         value = data.get(field_name)
         _validate_field_and_recurse(field_name, value, constraints, errors)
 
@@ -200,6 +204,40 @@ async def validate_async_stream(stream: AsyncIterable[Any], *constraints: Any) -
         i += 1
 
 
+def _process_monk_validate_result(result: Any, errors: list[ErrorDict]) -> None:
+    """Normalizes and processes the output of the __monk_validate__ hook."""
+    if result is None:
+        return
+
+    items: Iterable[Any]
+    # 1. Normalize the output: if it's a single string or single tuple, wrap it in a list
+    if isinstance(result, str) or (isinstance(result, tuple) and len(result) > 0 and isinstance(result[0], str)):
+        items = [result]
+    elif isinstance(result, Iterable):
+        items = result
+    else:
+        raise TypeError(f"Invalid yield/return from __monk_validate__: {result}. Expected a string or tuple.")
+
+    # 2. Process the items
+    for err in items:
+        if isinstance(err, str):
+            errors.append({"field": "__root__", "message": err, "code": "ModelRule"})
+        elif isinstance(err, tuple):
+            if not all(isinstance(item, str) for item in err):
+                raise TypeError(f"Invalid tuple items from __monk_validate__: {err}. All tuple items must be strings.")
+
+            if len(err) == 1:
+                errors.append({"field": "__root__", "message": err[0], "code": "ModelRule"})
+            elif len(err) == 2:
+                errors.append({"field": err[0], "message": err[1], "code": "ModelRule"})
+            elif len(err) == 3:
+                errors.append({"field": err[0], "message": err[1], "code": err[2]})
+            else:
+                raise TypeError(f"Invalid tuple length from __monk_validate__: {err}. Expected 1, 2, or 3 items.")
+        else:
+            raise TypeError(f"Invalid item yielded/returned from __monk_validate__: {err}. Expected a string or tuple.")
+
+
 def validate(instance: T) -> T:
     """
     Validates a Monk dataclass instance.
@@ -220,44 +258,15 @@ def validate(instance: T) -> T:
 
     # Run cross-field validation ONLY if all field-level rules passed
     if not errors and hasattr(instance, "__monk_validate__"):
+        if inspect.iscoroutinefunction(instance.__monk_validate__) or inspect.isasyncgenfunction(
+            instance.__monk_validate__
+        ):
+            raise TypeError(
+                "iron-monk is strictly synchronous. Async __monk_validate__ hooks are not supported. Stateful validation (like DB lookups) should occur in your service layer after syntax validation."
+            )
+
         result = instance.__monk_validate__()
-
-        if result is not None:
-            items: Iterable[Any]
-            # 1. Normalize the output: if it's a single string or single tuple, wrap it in a list
-            if isinstance(result, str) or (
-                isinstance(result, tuple) and len(result) > 0 and isinstance(result[0], str)
-            ):
-                items = [result]
-            elif isinstance(result, Iterable):
-                items = result
-            else:
-                raise TypeError(f"Invalid yield/return from __monk_validate__: {result}. Expected a string or tuple.")
-
-            # 2. Process the items
-            for err in items:
-                if isinstance(err, str):
-                    errors.append({"field": "__root__", "message": err, "code": "ModelRule"})
-                elif isinstance(err, tuple):
-                    if not all(isinstance(item, str) for item in err):
-                        raise TypeError(
-                            f"Invalid tuple items from __monk_validate__: {err}. All tuple items must be strings."
-                        )
-
-                    if len(err) == 1:
-                        errors.append({"field": "__root__", "message": err[0], "code": "ModelRule"})
-                    elif len(err) == 2:
-                        errors.append({"field": err[0], "message": err[1], "code": "ModelRule"})
-                    elif len(err) == 3:
-                        errors.append({"field": err[0], "message": err[1], "code": err[2]})
-                    else:
-                        raise TypeError(
-                            f"Invalid tuple length from __monk_validate__: {err}. Expected 1, 2, or 3 items."
-                        )
-                else:
-                    raise TypeError(
-                        f"Invalid item yielded/returned from __monk_validate__: {err}. Expected a string or tuple."
-                    )
+        _process_monk_validate_result(result, errors)
 
     if errors:
         raise ValidationError(errors)
