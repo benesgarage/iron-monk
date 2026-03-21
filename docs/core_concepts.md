@@ -147,7 +147,7 @@ class Headers:
     authorization: Annotated[str, StartsWith("Bearer ")]
 ```
 
-# Function and Method Validation
+## Function and Method Validation
 
 While `iron-monk` is heavily tailored for validating Data Transfer Objects (DTOs), the `@monk` decorator is actually a dual-purpose tool.
 
@@ -155,7 +155,7 @@ You can apply it directly to any standard Python function or method to natively 
 
 > **⚡ Note:** Unlike dataclasses, function validation is **always instantaneous (fail-fast)**. There is no deferred state; if the arguments violate your constraints, the function will immediately raise an error and will not run.
 
-## Validating Inputs
+### Validating Inputs
 
 When applied to a function, `iron-monk` will intercept the incoming arguments and validate them before the function executes.
 
@@ -177,7 +177,7 @@ except ValidationError as e:
     # ['email: Must be a valid email address.', 'age: Must be greater than or equal to 18.']
 ```
 
-## Validating Outputs (Return Types)
+### Validating Outputs
 
 `iron-monk` doesn't just protect your functions from bad inputs; it also protects your application from bad outputs. 
 
@@ -201,7 +201,7 @@ except ValidationError as e:
     # ['return: Failed validation for islower.']
 ```
 
-## Object-Oriented & Async Support
+### Object-Oriented & Async Support
 
 The decorator fully supports asynchronous functions and all standard Object-Oriented methods (instance methods, class methods, and static methods). Just make sure `@monk` is the **innermost** decorator (placed directly above the function definition).
 
