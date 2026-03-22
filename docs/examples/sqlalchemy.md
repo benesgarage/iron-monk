@@ -1,49 +1,47 @@
 # SQLAlchemy 2.0
 
-SQLAlchemy 2.0 introduced the `MappedAsDataclass` mixin, which allows your ORM models to behave exactly like standard Python dataclasses. 
+> https://github.com/sqlalchemy/sqlalchemy
 
-Because `iron-monk` relies on standard dataclass mechanics and pure Python type hints, you can decorate your SQLAlchemy models directly! This allows you to strictly validate your data *before* you ever commit it to the database, saving you from parsing ugly database `IntegrityError`s.
+Validate your data at the edge of your application, and only pass proven, safe data to SQLAlchemy.
 
 ## The Integration
 
 ```python
 from typing import Annotated
-from sqlalchemy.orm import DeclarativeBase, MappedAsDataclass, Mapped, mapped_column
-
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from monk import monk, validate
 from monk.constraints import Email, Len
 from monk.exceptions import ValidationError
 
-# 1. Define the base class using the SQLAlchemy dataclass mixin
-class Base(MappedAsDataclass, DeclarativeBase):
+# 1. The Database Model (Pure Persistence)
+class Base(DeclarativeBase):
     pass
 
-# 2. Decorate your ORM model with @monk!
-@monk
 class UserDB(Base):
     __tablename__ = "users"
     
-    id: Mapped[int] = mapped_column(primary_key=True, init=False)
-    
-    # Wrap your Mapped types with Annotated constraints
-    username: Mapped[Annotated[str, Len(min_len=3)]]
-    email: Mapped[Annotated[str, Email]] = mapped_column(unique=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str]
+    email: Mapped[str] = mapped_column(unique=True)
 
-# 3. Instantiate your ORM model
-new_user = UserDB(username="ab", email="bad-email")
+# 2. The DTO (Pure Validation)
+@monk
+class CreateUserDTO:
+    username: Annotated[str, Len(min_len=3)]
+    email: Annotated[str, Email]
 
-# 4. Validate BEFORE adding to the session!
-try:
-    validate(new_user)
+# 3. The API / Service Handler
+def register_user(payload: dict) -> UserDB:
+    try:
+        # Validate at the boundary
+        safe_dto = validate(CreateUserDTO(**payload))
+    except ValidationError as e:
+        print("Request rejected:", e.flatten())
+        raise
+        
+    # Hand pure data to the ORM
+    new_user = UserDB(username=safe_dto.username, email=safe_dto.email)
     # session.add(new_user)
     # session.commit()
-except ValidationError as e:
-    print("Database insert aborted! Validation failed:")
-    print(e.flatten())
-```
-
-### Output
-```bash
-Database insert aborted! Validation failed:
-['username: Must have a minimum length of 3.', 'email: Must be a valid email address.']
+    return new_user
 ```

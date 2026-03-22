@@ -38,7 +38,7 @@ poetry add iron-monk
 
 ## Quickstart
 
-`iron-monk` provides four ways to validate your data using standard Python type hints and explicit constraints.
+`iron-monk` provides four ways to validate your data using constraints.
 
 ```python
 from typing import Annotated, TypedDict
@@ -67,7 +67,7 @@ validate_dict({"email": "bad-email"}, UserDict) # ❌ ValidationError
 Email().validate("bad-email") # ❌ ValueError
 ```
 
-When validation fails, `iron-monk` aggregates all errors so you can easily return structured JSON payloads to your frontend:
+When validation fails, `iron-monk` aggregates all errors into structured dictionaries.
 ```python
 from monk import validate
 from monk.exceptions import ValidationError
@@ -92,11 +92,11 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
 - 🧬 **Zero Inheritance:** No massive base classes polluting your namespace. Just a decorator.
 
  ## Performance
- Because `iron-monk` relies on standard Python dataclasses and a highly-optimized recursion loop (rather than complex metaclasses or type coercion), it doesn't compromise on speed.
+ `iron-monk` doesn't compromise on speed.
  
  *Tested on Python 3.13, executing 100,000 simple primitive validations.*
 
-| Metric                               | `iron-monk`<br>*(v0.16.1)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
+| Metric                               | `iron-monk`<br>*(v0.16.3)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
 |--------------------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
 | **Package Size**                     | `0.04 MB`                  | `0.44 MB`                | `5.91 MB`                 | `0.21 MB`              | `0.17 MB`                    | `0.09 MB` |
 | **Cold Start**                       | `32.05ms`                  | `36.96ms`                | `61.59ms`                 | `38.78ms`              | `40.00ms`                    |
@@ -108,7 +108,9 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
 | **Partial Dict Validation (100k)**   | `0.059s`                   | N/A                      | N/A                       | N/A                    | `0.276s`                     |
 | **Function Validation (100k)**       | `0.155s`                   | N/A                      | `0.055s`                  | N/A                    | N/A                          |
 
-👉 [**Read our full benchmarking methodology and the deep-dive into these results &rarr;**](https://benesgarage.github.io/iron-monk/benchmarks/)
+**The Takeaway:** When evaluating features, execution speed, package size, and cold-start times together, `iron-monk` is holistically the best-in-class pure-Python validation framework.
+
+👉 [**See our benchmarking methodology &rarr;**](https://benesgarage.github.io/iron-monk/benchmarks/)
 
 ## Real-world examples
 `iron-monk` is designed to drop into any modern Python project. Some notable projects include:
@@ -116,7 +118,7 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
 - ⚡ Starlette (ASGI): HTTP endpoints with simple request validation using `iron-monk`. 
 - 🖥️ tyro (CLI tool): Generate command-line interfaces from dataclasses and validate with `iron-monk`.
 
-👉 [**See `iron-monk` integrate with these projects, and more, in our Real-World Examples &rarr;**](https://benesgarage.github.io/iron-monk/examples/)
+👉 [**See `iron-monk` integrate with these projects, and more &rarr;**](https://benesgarage.github.io/iron-monk/examples/)
 
 ## Core Concepts
 Understand the validation lifecycle, how to cleanly extract error dictionaries, and how to enforce required fields.

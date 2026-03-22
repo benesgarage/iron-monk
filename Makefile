@@ -6,13 +6,18 @@ help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install the package in editable mode with development dependencies
-	python -m pip install -e ".[dev]"
+	uv sync --extra dev
 
 test: ## Run the test suite (coverage is configured in pyproject.toml)
-	pytest
+	pytest tests
 
 cov: ## Run the test suite and generate a coverage report
-	pytest --cov=monk --cov-report=term-missing
+	pytest tests --cov=monk --cov-report=term-missing
+
+integration: ## Run integration tests (installs extras, runs tests, then removes extras)
+	uv sync --extra dev --extra integrations
+	pytest tests_integration; RET=$$?; \
+	exit $$RET
 
 lint: ## Run the Ruff linter
 	ruff check --fix .

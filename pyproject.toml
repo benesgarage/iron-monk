@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iron-monk"
-version = "0.16.2"
+version = "0.16.3"
 description = "A minimalist, zero-coercion validation library for Python."
 readme = "README.md"
 authors = [
@@ -29,6 +29,15 @@ classifiers = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "mypy", "ruff", "build", "mkdocs-material", "anyio", "pyright"]
+integrations = [
+    "beartype",
+    "tyro",
+    "starlette",
+    "httpx",
+    "strawberry-graphql",
+    "sqlalchemy",
+    "tortoise-orm"
+]
 
 [project.urls]
 Repository = "https://github.com/benesgarage/iron-monk"
@@ -47,7 +56,7 @@ warn_return_any = true
 warn_unused_configs = true
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "tests_integration"]
 typeCheckingMode = "strict"
 reportUnknownArgumentType = false
 reportUnknownMemberType = false

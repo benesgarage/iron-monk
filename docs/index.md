@@ -6,22 +6,9 @@
 Welcome to the official documentation for **iron-monk**, a minimalist, zero-coercion validation library for Python.
 
 ## The Philosophy
-The Python ecosystem is dominated by heavy validation frameworks. 
+The Python ecosystem is dominated by heavy validation frameworks that do too much.
 
-If you are ingesting a 10,000-line JSON array from a data pipeline and need to coerce it, validate it, and serialize it back out thousands of times a second, Pydantic V2 or `msgspec` is the tool for the job.
-
-But do 99% of developers need that? Absolutely not.
-
-The vast majority of Python developers are building standard CRUD web APIs, CLI tools, or background workers. Their payloads look like this:
-```json
-{
-  "username": "bob",
-  "email": "test@domain.com",
-  "age": 25
-}
-```
-
-To validate those three fields, developers are currently installing libraries that download compiled Rust binaries, inject massive metaclasses into their objects, drastically slow down their server boot times (due to import overhead), and add megabytes of bloat to their Docker containers. It is the definition of using a sledgehammer to crack a nut.
+To validate a standard API payload, you shouldn't have to install a library that downloads compiled Rust binaries, injects massive metaclasses, slows down server boot times, and adds megabytes of bloat to your Docker containers.
 
 `iron-monk` was built to provide a clean, explicitly-typed alternative:
 
@@ -35,19 +22,19 @@ To validate those three fields, developers are currently installing libraries th
 ### Validation vs. Type Checking
 We draw a strict line between *Type Checking* ("Does this value match the Python type hint?") and *Value Validation* ("Does this value satisfy my business rules?"). 
 
-`iron-monk` focuses entirely on the latter. It does not perform deep runtime type-checking. This means it works perfectly as a standalone framework for standard API validation, or it can stack flawlessly alongside dedicated strict typing tools like `beartype` or `typeguard` without stepping on their toes.
+`iron-monk` focuses entirely on the latter. By skipping deep runtime type-checking, it operates perfectly as a standalone validator or stacks flawlessly alongside dedicated tools like `beartype` or `typeguard`.
 
-The one area where these lines blur is missing data (nullability). To learn how `iron-monk` enforces presence, or how to configure it to completely defer to an external type checker, read about [Required vs. Optional Fields](core_concepts.md#required-vs-optional-fields) and [Relying on Runtime Type Checkers](core_concepts.md#relying-on-runtime-type-checkers).
+To configure how `iron-monk` handles missing data (nullability), see [Required vs. Optional Fields](core_concepts.md#required-vs-optional-fields) and [Relying on Runtime Type Checkers](core_concepts.md#relying-on-runtime-type-checkers).
 
 ## Getting Started
-
-To learn how to use the framework, check out:
-
-1. [**Core Concepts**](core_concepts.md): Understand the validation lifecycle, how to extract errors, and required vs. optional fields.
-2. [**The Constraint Toolkit**](constraints.md): A complete list of all built-in rules (like `Email`, `Interval`, and `Each`).
-2. [**Advanced Usage**](advanced.md): Learn about Cross-Field validation, Fail-Fast mode, and Custom Error Messages.
-3. [**Real-World Examples**](examples.md): See how to seamlessly drop `iron-monk` into frameworks like Strawberry GraphQL, Starlette, and Tyro.
 
 ```bash
 pip install iron-monk
 ```
+
+Dive into the documentation:
+
+1. [**Core Concepts**](core_concepts.md): The validation lifecycle, error extraction, and nullability.
+2. [**The Constraint Toolkit**](constraints.md): A complete reference of all built-in rules (e.g. `Email`, `Interval`, `Nested`).
+2. [**Advanced Usage**](advanced.md): Raw dictionaries, partial updates (PATCH), lazy streams, and cross-field logic.
+3. [**Real-World Examples**](examples.md): Drop-in integrations for Strawberry GraphQL, Starlette, ORMs, and CLI tools.

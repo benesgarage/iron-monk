@@ -1,71 +1,40 @@
 # Logical Composability
 
-`iron-monk` provides dedicated logical constraints for complex input types and advanced message grouping.
+Use logical constraints to handle complex inputs and group error messages.
 
-### `AnyOf` (Logical OR)
-`AnyOf` is perfect when a field accepts multiple valid formats, such as a generic login identifier.
+- `AnyOf` (OR): Passes if at least one constraint succeeds. Perfect for fields that accept multiple formats.
+- `AllOf` (AND): Enforces that all constraints pass. Used to group multiple rules under a single custom error message or code.
+- `Not` (NOT): Inverts a constraint. Succeeds only if the inner rule fails.
 
+### Nested Composability
+Because these operators are standard constraints, you can deeply nest them to represent complex real-world business logic.
 ```python
 from typing import Annotated
 from monk import monk
-from monk.constraints import AnyOf, Email, StartsWith
+from monk.constraints import AnyOf, AllOf, Not, Email, StartsWith, LowerCase, Len, EndsWith
 
 @monk
-class LoginPayload:
-    # Passes if the value is an Email OR starts with a "+"
+class ComplexRules:
+    # 1. AnyOf (OR): Email OR Phone
     identifier: Annotated[
         str, 
-        AnyOf(Email, StartsWith("+"), message="Must be a valid email or phone number.")
+        AnyOf(Email, StartsWith("+"), message="Must be an email or phone number.")
     ]
-```
 
-### `AllOf` (Logical AND)
-`AllOf` enforces that all constraints pass. While standard `Annotated` stacking does this implicitly, `AllOf` allows you to group multiple constraints under a **single custom error message** or **custom error code**.
-
-```python
-from typing import Annotated
-from monk import monk
-from monk.constraints import AllOf, LowerCase, Len
-
-@monk
-class Registration:
-    # Instead of failing with "Must have a minimum length..." or "Failed validation for islower...",
-    # it groups the rules and fails uniformly with your custom message!
+    # 2. AllOf (AND): Groups rules under one unified message
     username: Annotated[
         str, 
         AllOf(LowerCase, Len(min_len=5), message="Usernames must be lowercase and 5+ chars.")
     ]
-```
 
-### Not (Logical NOT)
-The Not constraint inverts the logic of another constraint. It succeeds only if the inner constraint fails.
-```python
-from typing import Annotated
-from monk import monk
-from monk.constraints import Not, LowerCase
-
-@monk
-class SecurityPayload:
-    # Fails if the password IS entirely lowercase
+    # 3. Not (NOT): Fails if the password IS entirely lowercase
     password: Annotated[
         str, 
         Not(LowerCase, message="Password cannot be entirely lowercase.")
     ]
-```
 
-### Nested Composability
-Because these logical operators are just standard constraints, they can be deeply nested inside each other to represent complex, real-world business logic.
-
-```python
-from typing import Annotated
-from monk import monk
-from monk.constraints import AnyOf, AllOf, Email, StartsWith, Len, EndsWith
-
-
-@monk
-class ContactInfo:
-    # Matches an Email OR Phone number (Starts with "+" AND len <= 15 AND NOT Ends with "000")
-    identifier: Annotated[
+    # 4. Nested: Matches Email OR (Phone AND length <= 15 AND NOT ending in "000")
+    contact: Annotated[
         str,
         AnyOf(
             Email,

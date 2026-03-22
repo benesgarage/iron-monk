@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.3]
+
+### Added
+- **Integration testing:** Built a fully isolated integration testing suite (`tests_integration/`) that continuously proves `iron-monk`'s compatibility with Starlette, Strawberry GraphQL, SQLAlchemy, Tortoise ORM, `tyro`, and `beartype`.
+- **Ecosystem Monitoring:** Added a dedicated GitHub Actions workflow to test integration compatibility against upstream framework updates.
+
+### Changed
+- **Documentation Overhaul:** Completely rewrote the documentation to be sleek, punchy, and no-nonsense.
+- **CI/CD Pipeline:** Migrated all GitHub Actions workflows to use `uv` (`astral-sh/setup-uv`), drastically reducing CI build and execution times.
+
 ## [0.16.2]
 
 ### Fixed
