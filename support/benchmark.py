@@ -55,14 +55,12 @@ pydantic_import = measure_import("pydantic")
 msgspec_import = measure_import("msgspec")
 attrs_import = measure_import("attrs")
 marshmallow_import = measure_import("marshmallow")
-voluptuous_import = measure_import("voluptuous")
 
 monk_size = measure_size("monk")
 pydantic_size = measure_size("pydantic", "pydantic_core", "annotated_types")
 msgspec_size = measure_size("msgspec")
 attrs_size = measure_size("attrs", "attr")
 marshmallow_size = measure_size("marshmallow")
-voluptuous_size = measure_size("voluptuous")
 
 # ---------------------------------------------------------
 # 2. Object Instantiation & Validation (Fail-Fast)
@@ -220,29 +218,6 @@ except Exception:
     pass
 """
 
-setup_voluptuous = """
-from voluptuous import Schema, Required, Length, All, Range, REMOVE_EXTRA
-
-schema = Schema({
-    Required('id'): int,
-    Required('username'): All(str, Length(min=3)),
-    Required('age'): All(int, Range(min=18)),
-}, extra=REMOVE_EXTRA)
-data = {"id": 1, "username": "kai", "age": 25}
-bad_data = {"id": "bad", "username": "a", "age": 10}
-messy_data = {"id": 1, "username": "kai", "age": 25, "tracking_id": "123", "is_admin": True, "browser": "chrome"}
-"""
-run_voluptuous = "schema(data)"
-
-# Sanitization Validation
-run_voluptuous_sanitized = "schema(messy_data)"
-
-run_voluptuous_invalid = """try:
-    schema(bad_data)
-except Exception:
-    pass
-"""
-
 # ---------------------------------------------------------
 # 4. Nested Dictionary Validation
 # ---------------------------------------------------------
@@ -307,6 +282,26 @@ data = {
 """
 run_msgspec_nested = "msgspec.convert(data, User)"
 
+setup_marshmallow_nested = """
+from marshmallow import Schema, fields, validate
+
+class AddressSchema(Schema):
+    city = fields.Str(validate=validate.Length(min=2), required=True)
+
+class UserSchema(Schema):
+    id = fields.Int(required=True)
+    address = fields.Nested(AddressSchema, required=True)
+    history = fields.List(fields.Nested(AddressSchema), required=True)
+
+schema = UserSchema()
+data = {
+    "id": 1,
+    "address": {"city": "New York"},
+    "history": [{"city": "London"}, {"city": "Paris"}]
+}
+"""
+run_marshmallow_nested = "schema.load(data)"
+
 # ---------------------------------------------------------
 # 5. Function Validation
 # ---------------------------------------------------------
@@ -344,23 +339,21 @@ monk_dict_time = timeit.timeit(run_monk_dict, setup=setup_monk_dict, number=ITER
 pydantic_dict_time = timeit.timeit(run_pydantic_dict, setup=setup_pydantic_dict, number=ITERATIONS)
 msgspec_dict_time = timeit.timeit(run_msgspec_dict, setup=setup_msgspec_dict, number=ITERATIONS)
 marshmallow_dict_time = timeit.timeit(run_marshmallow, setup=setup_marshmallow, number=ITERATIONS)
-voluptuous_dict_time = timeit.timeit(run_voluptuous, setup=setup_voluptuous, number=ITERATIONS)
 
 monk_invalid_time = timeit.timeit(run_monk_invalid, setup=setup_monk_dict, number=ITERATIONS)
 pydantic_invalid_time = timeit.timeit(run_pydantic_invalid, setup=setup_pydantic_dict, number=ITERATIONS)
 msgspec_invalid_time = timeit.timeit(run_msgspec_invalid, setup=setup_msgspec_dict, number=ITERATIONS)
 marshmallow_invalid_time = timeit.timeit(run_marshmallow_invalid, setup=setup_marshmallow, number=ITERATIONS)
-voluptuous_invalid_time = timeit.timeit(run_voluptuous_invalid, setup=setup_voluptuous, number=ITERATIONS)
 
 monk_nested_time = timeit.timeit(run_monk_nested, setup=setup_monk_nested, number=ITERATIONS)
 pydantic_nested_time = timeit.timeit(run_pydantic_nested, setup=setup_pydantic_nested, number=ITERATIONS)
 msgspec_nested_time = timeit.timeit(run_msgspec_nested, setup=setup_msgspec_nested, number=ITERATIONS)
+marshmallow_nested_time = timeit.timeit(run_marshmallow_nested, setup=setup_marshmallow_nested, number=ITERATIONS)
 
 monk_sanitized_time = timeit.timeit(run_monk_sanitized, setup=setup_monk_dict, number=ITERATIONS)
 pydantic_sanitized_time = timeit.timeit(run_pydantic_sanitized, setup=setup_pydantic_dict, number=ITERATIONS)
 msgspec_sanitized_time = timeit.timeit(run_msgspec_sanitized, setup=setup_msgspec_dict, number=ITERATIONS)
 marshmallow_sanitized_time = timeit.timeit(run_marshmallow_sanitized, setup=setup_marshmallow, number=ITERATIONS)
-voluptuous_sanitized_time = timeit.timeit(run_voluptuous_sanitized, setup=setup_voluptuous, number=ITERATIONS)
 
 monk_partial_time = timeit.timeit(run_monk_partial, setup=setup_monk_dict, number=ITERATIONS)
 marshmallow_partial_time = timeit.timeit(run_marshmallow_partial, setup=setup_marshmallow, number=ITERATIONS)
@@ -372,28 +365,28 @@ pydantic_func_time = timeit.timeit(run_pydantic_func, setup=setup_pydantic_func,
 # Output Markdown Table
 # ---------------------------------------------------------
 print("### Benchmark Results\n")
-print("| Metric | `iron-monk` | `msgspec` | `pydantic` | `attrs` | `marshmallow` | `voluptuous` |")
-print("|--------|-------------|-----------|------------|---------|---------------|--------------|")
+print("| Metric | `iron-monk` | `msgspec` | `pydantic` | `attrs` | `marshmallow` |")
+print("|--------|-------------|-----------|------------|---------|---------------|")
 print(
-    f"| **Package Size** | `{monk_size}` | `{msgspec_size}` | `{pydantic_size}` | `{attrs_size}` | `{marshmallow_size}` | `{voluptuous_size}` |"
+    f"| **Package Size** | `{monk_size}` | `{msgspec_size}` | `{pydantic_size}` | `{attrs_size}` | `{marshmallow_size}` |"
 )
 print(
-    f"| **Cold Start** | `{monk_import * 1000:.2f}ms` | `{msgspec_import * 1000:.2f}ms` | `{pydantic_import * 1000:.2f}ms` | `{attrs_import * 1000:.2f}ms` | `{marshmallow_import * 1000:.2f}ms` | `{voluptuous_import * 1000:.2f}ms` |"
+    f"| **Cold Start** | `{monk_import * 1000:.2f}ms` | `{msgspec_import * 1000:.2f}ms` | `{pydantic_import * 1000:.2f}ms` | `{attrs_import * 1000:.2f}ms` | `{marshmallow_import * 1000:.2f}ms` |"
 )
 print(
     f"| **Object ({ITERATIONS // 1000}k)** | `{monk_obj_time:.3f}s` | `{msgspec_obj_time:.3f}s` | `{pydantic_obj_time:.3f}s` | `{attrs_obj_time:.3f}s` | N/A | N/A |"
 )
 print(
-    f"| **Dict ({ITERATIONS // 1000}k)** | `{monk_dict_time:.3f}s` | `{msgspec_dict_time:.3f}s` | `{pydantic_dict_time:.3f}s` | N/A | `{marshmallow_dict_time:.3f}s` | `{voluptuous_dict_time:.3f}s` |"
+    f"| **Dict ({ITERATIONS // 1000}k)** | `{monk_dict_time:.3f}s` | `{msgspec_dict_time:.3f}s` | `{pydantic_dict_time:.3f}s` | N/A | `{marshmallow_dict_time:.3f}s` |"
 )
 print(
-    f"| **Nested Dict ({ITERATIONS // 1000}k)** | `{monk_nested_time:.3f}s` | `{msgspec_nested_time:.3f}s` | `{pydantic_nested_time:.3f}s` | N/A | N/A | N/A |"
+    f"| **Nested Dict ({ITERATIONS // 1000}k)** | `{monk_nested_time:.3f}s` | `{msgspec_nested_time:.3f}s` | `{pydantic_nested_time:.3f}s` | N/A | `{marshmallow_nested_time:.3f}s` |"
 )
 print(
-    f"| **Invalid Dict ({ITERATIONS // 1000}k)** | `{monk_invalid_time:.3f}s` | `{msgspec_invalid_time:.3f}s` | `{pydantic_invalid_time:.3f}s` | N/A | `{marshmallow_invalid_time:.3f}s` | `{voluptuous_invalid_time:.3f}s` |"
+    f"| **Invalid Dict ({ITERATIONS // 1000}k)** | `{monk_invalid_time:.3f}s` | `{msgspec_invalid_time:.3f}s` | `{pydantic_invalid_time:.3f}s` | N/A | `{marshmallow_invalid_time:.3f}s` |"
 )
 print(
-    f"| **Sanitized Dict ({ITERATIONS // 1000}k)** | `{monk_sanitized_time:.3f}s` | `{msgspec_sanitized_time:.3f}s` | `{pydantic_sanitized_time:.3f}s` | N/A | `{marshmallow_sanitized_time:.3f}s` | `{voluptuous_sanitized_time:.3f}s` |"
+    f"| **Sanitized Dict ({ITERATIONS // 1000}k)** | `{monk_sanitized_time:.3f}s` | `{msgspec_sanitized_time:.3f}s` | `{pydantic_sanitized_time:.3f}s` | N/A | `{marshmallow_sanitized_time:.3f}s` |"
 )
 print(
     f"| **Partial Dict ({ITERATIONS // 1000}k)** | `{monk_partial_time:.3f}s` | N/A | N/A | N/A | `{marshmallow_partial_time:.3f}s` | N/A |"
