@@ -49,7 +49,7 @@ uv init
 uv python pin 3.13
 
 # 2. Install the competitors and iron-monk directly from PyPI
-uv add iron-monk msgspec pydantic attrs marshmallow voluptuous
+uv add iron-monk msgspec pydantic attrs marshmallow
 
 # 3. Download and run the benchmark script
 curl -O https://raw.githubusercontent.com/benesgarage/iron-monk/main/support/benchmark.py
