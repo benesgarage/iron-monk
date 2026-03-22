@@ -108,12 +108,7 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
 | **Partial Dict Validation (100k)**   | `0.059s`                   | N/A                      | N/A                       | N/A                    | `0.276s`                     |
 | **Function Validation (100k)**       | `0.155s`                   | N/A                      | `0.055s`                  | N/A                    | N/A                          |
 
- **The Takeaway:**
- - **Feature Rich Validator:** `iron-monk` is the *only* library on this board that natively supports standard objects, raw dicts, deep nesting, dynamic partial updates, automatic sanitization, and function interception without requiring secondary schemas or heavy plugins.
- - **Microscopic Footprint:** At just `40 KB`, `iron-monk` is the smallest full-featured validation library in the ecosystem—1/147th the size of Pydantic.
- - **Serverless Ready:** The fastest library to import. By skipping heavy compiled Rust/C binaries, `iron-monk` minimizes AWS Lambda cold starts.
- - **Pure Python:** Best-in-class pure-Python framework, able to process over **1.3 million dictionaries per second** (`0.075s` for 100k dicts).
-
+👉 [**Read our full benchmarking methodology and the deep-dive into these results &rarr;**](https://benesgarage.github.io/iron-monk/benchmarks/)
 
 ## Real-world examples
 `iron-monk` is designed to drop into any modern Python project. Some notable projects include:

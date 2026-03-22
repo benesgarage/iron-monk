@@ -36,6 +36,7 @@ nav:
   - Home: index.md
   - Core Concepts: core_concepts.md
   - The Constraint Toolkit: constraints.md
+  - Performance & Benchmarks: benchmarks.md
   - Advanced Usage:
       - Overview: advanced.md
       - Dicts, Streams, & Execution: advanced/execution.md
