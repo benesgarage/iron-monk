@@ -251,3 +251,46 @@ def test_each_constraint_failure() -> None:
     assert "department" in errors[4]["field"]  # 'engineeri' fails OneOf
     assert "tags" in errors[5]["field"]  # Does not contain 'core'
     assert "sparse_matrix[0][0]" in errors[6]["field"]  # 'A' failed LowerCase
+
+
+def test_contains_keys_constraint() -> None:
+    from monk.constraints import ContainsKeys
+
+    constraint = ContainsKeys(["a", "b"])
+
+    constraint.validate({"a": 1, "b": 2, "c": 3})
+
+    with pytest.raises(ValueError, match="missing required keys"):
+        constraint.validate({"a": 1})
+
+    with pytest.raises(TypeError):
+        constraint.validate(["a", "b"])
+
+
+def test_subset_constraint() -> None:
+    from monk.constraints import Subset
+
+    constraint = Subset(["A", "B", "C"])
+
+    constraint.validate(["A", "B"])
+    constraint.validate(("A",))
+    constraint.validate(set())
+
+    with pytest.raises(ValueError, match="Contains unallowed items."):
+        constraint.validate(["A", "D"])
+    with pytest.raises(TypeError):
+        constraint.validate(123)
+    with pytest.raises(TypeError, match="Cannot eagerly validate exhaustible iterator"):
+        constraint.validate((x for x in ["A"]))
+
+
+def test_exact_len_constraint() -> None:
+    from monk.constraints import ExactLen
+
+    ExactLen(5).validate("12345")
+    ExactLen(3).validate([1, 2, 3])
+
+    with pytest.raises(ValueError, match="Must have an exact length of 5."):
+        ExactLen(5).validate("1234")
+    with pytest.raises(TypeError):
+        ExactLen(5).validate(123)

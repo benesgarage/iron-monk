@@ -8,7 +8,7 @@ These benchmarks were run in an isolated virtual environment using **Python 3.13
 
 Validations were executed 100,000 times against simple, primitive constraints (e.g., string length and integer intervals) to ensure a fair measurement of framework overhead.
 
-| Metric                               | `iron-monk`<br>*(v0.16.3)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
+| Metric                               | `iron-monk`<br>*(v0.17.0)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
 |--------------------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
 | **Package Size**                     | `0.04 MB`                  | `0.44 MB`                | `5.91 MB`                 | `0.21 MB`              | `0.17 MB`                    | `0.09 MB` |
 | **Cold Start**                       | `32.05ms`                  | `36.96ms`                | `61.59ms`                 | `38.78ms`              | `40.00ms`                    |

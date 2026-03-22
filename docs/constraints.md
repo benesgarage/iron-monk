@@ -9,7 +9,7 @@
 ```python
 from typing import Annotated
 from monk import monk
-from monk.constraints import Match, StartsWith, EndsWith, LowerCase, UpperCase, IsDigit, IsAscii
+from monk.constraints import Match, StartsWith, EndsWith, LowerCase, UpperCase, IsDigit, IsAscii, IsAlpha, IsAlnum, Trimmed
 
 @monk
 class StringConstraints:
@@ -20,6 +20,11 @@ class StringConstraints:
     # Standard string predicates
     pin: Annotated[str, IsDigit]
     ascii_text: Annotated[str, IsAscii]
+    alpha_code: Annotated[str, IsAlpha]
+    alnum_code: Annotated[str, IsAlnum]
+    
+    # Whitespace safety
+    clean_text: Annotated[str, Trimmed]
     
     # Match a specific Regular Expression
     sku: Annotated[str, Match(r"^PROD-\d+$")]
@@ -60,7 +65,7 @@ class NumericConstraints:
 from typing import Annotated, TypedDict
 
 from monk import monk
-from monk.constraints import Each, LowerCase, Len, OneOf, Unique, Contains, Nested
+from monk.constraints import Each, LowerCase, Len, ExactLen, OneOf, Unique, Contains, Nested, ContainsKeys, Subset
 
 class AddressDict(TypedDict):
     city: str
@@ -69,6 +74,7 @@ class AddressDict(TypedDict):
 class CollectionConstraints:
     # Validates the length of lists, strings, or dicts
     tags: Annotated[list[str], Len(min_len=1, max_len=10)]
+    pin_code: Annotated[str, ExactLen(4)]
 
     # Ensures an item exists in the collection
     categories: Annotated[list[str], Contains("default")]
@@ -76,24 +82,30 @@ class CollectionConstraints:
     # Ensure the value is exactly one of the provided choices
     role: Annotated[str, OneOf(["admin", "editor", "viewer"])]
     
+    # Ensure all elements exist within a predefined set (blazing fast for subsets)
+    permissions: Annotated[list[str], Subset(["read", "write", "execute"])]
+    
     # All elements must be unique (safely falls back for unhashable types like lists of lists!)
     matrix: Annotated[list[list[int]], Unique]
     
     # Recursively applies constraints to every item in an iterable
     emails: Annotated[list[str], Each(LowerCase, Len(min_len=5))]
     
+    # Ensure specific keys exist in an arbitrary dictionary
+    payload: Annotated[dict, ContainsKeys(["id", "type"])]
+    
     # Validates a nested raw dictionary against another schema
     address: Annotated[AddressDict, Nested(AddressDict)]
 ```
 
-## Format & Network
+## Format, Geospatial & Network
 
 ```python
 import uuid
 from typing import Annotated
 
 from monk import monk
-from monk.constraints import Email, URL, IPAddress, UUID
+from monk.constraints import Email, URL, IPAddress, UUID, Slug, SemVer, Base64, HexColor, MacAddress, JSON, Port, LatLong
 
 @monk
 class NetworkConstraints:
@@ -108,9 +120,33 @@ class NetworkConstraints:
     
     # Validates UUID strings or native UUID objects
     node_id: Annotated[str | uuid.UUID, UUID]
+    
+    # URL-safe slugs
+    blog_slug: Annotated[str, Slug]
+    
+    # Semantic Versioning
+    api_version: Annotated[str, SemVer]
+    
+    # Base64 Encoded Strings
+    encoded_payload: Annotated[str, Base64]
+    
+    # Hexadecimal Colors (e.g., #FFF, #FF5733)
+    theme_color: Annotated[str, HexColor]
+    
+    # Hardware MAC Addresses
+    device_mac: Annotated[str, MacAddress]
+    
+    # Safely checks if a string is parsable JSON
+    config_data: Annotated[str, JSON]
+    
+    # Network Ports (1-65535)
+    db_port: Annotated[int, Port]
+    
+    # Coordinates (Latitude, Longitude)
+    coordinates: Annotated[tuple[float, float], LatLong]
 ```
 
-## Logic & File System
+## Logic, Datetime & File System
 
 ```python
 import datetime
@@ -118,7 +154,7 @@ import pathlib
 from typing import Annotated
 
 from monk import monk
-from monk.constraints import Predicate, Not, IsFile, IsDir, LowerCase, IsUTC
+from monk.constraints import Predicate, Not, IsFile, IsDir, LowerCase, IsUTC, Past, Future
 
 def is_even(n: int) -> bool:
     return n % 2 == 0
@@ -133,6 +169,10 @@ class SystemConfig:
     
     # Ensures a datetime object is strictly UTC
     created_at: Annotated[datetime.datetime, IsUTC]
+    
+    # Temporal directions
+    dob: Annotated[datetime.date, Past]
+    expires_at: Annotated[datetime.datetime, Future]
     
     # Validate that a string or pathlib.Path actually exists on the filesystem
     config_file: Annotated[pathlib.Path, IsFile]

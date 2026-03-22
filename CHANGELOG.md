@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0]
+
+### Added
+- **Toolkit Expansion:** Added 15 new built-in constraints to cover standard use cases:
+  - **Strings & Formats:** `IsAlpha`, `IsAlnum`, `Trimmed`, `ExactLen`, `Slug`, `SemVer`, `Base64`, `HexColor`, `JSON`
+  - **Networking & Geospatial:** `MacAddress`, `Port`, `LatLong`
+  - **Collections:** `ContainsKeys`, `Subset`
+  - **Datetime:** `Past`, `Future`
+
 ## [0.16.3]
 
 ### Added

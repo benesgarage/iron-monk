@@ -96,7 +96,7 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
  
  *Tested on Python 3.13, executing 100,000 simple primitive validations.*
 
-| Metric                               | `iron-monk`<br>*(v0.16.3)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
+| Metric                               | `iron-monk`<br>*(v0.17.0)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
 |--------------------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
 | **Package Size**                     | `0.04 MB`                  | `0.44 MB`                | `5.91 MB`                 | `0.21 MB`              | `0.17 MB`                    | `0.09 MB` |
 | **Cold Start**                       | `32.05ms`                  | `36.96ms`                | `61.59ms`                 | `38.78ms`              | `40.00ms`                    |
@@ -126,7 +126,7 @@ Understand the validation lifecycle, how to cleanly extract error dictionaries, 
 👉 [**Read the Core Concepts Guide &rarr;**](https://benesgarage.github.io/iron-monk/core_concepts/)
 
 ## The Toolkit
-**Batteries included**. `iron-monk` comes with a comprehensive suite of built-in constraints. From networking (`Email`, `URL`, `IPAddress`) to collections (`Each`, `Unique`) and logic (`Not`, `Predicate`), you will rarely need to write your own rules.
+**Batteries included**. `iron-monk` comes with a comprehensive suite of built-in constraints. From networking (`Email`, `Port`, `MacAddress`) and formats (`HexColor`, `JSON`, `SemVer`) to collections (`Subset`, `ContainsKeys`) and logic (`Not`, `Predicate`), you will rarely need to write your own rules.
 
 👉 [**Check out the Constraint Toolkit &rarr;**](https://benesgarage.github.io/iron-monk/constraints/)
 

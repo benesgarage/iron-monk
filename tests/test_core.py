@@ -18,6 +18,8 @@ from monk.constraints import (
     Len,
     Nullable,
     NotNull,
+    IsAlpha,
+    IsAlnum,
 )
 from monk.protocols import MonkConstraint
 
@@ -126,6 +128,58 @@ def test_is_utc_constraint() -> None:
         IsUTC.validate(dt_naive)
     with pytest.raises(ValueError):
         IsUTC.validate(dt_other)
+
+
+def test_is_alpha_alnum() -> None:
+    IsAlpha.validate("abc")
+    with pytest.raises(ValueError):
+        IsAlpha.validate("abc1")
+
+    IsAlnum.validate("abc1")
+    with pytest.raises(ValueError):
+        IsAlnum.validate("abc1!")
+
+
+def test_trimmed_constraint() -> None:
+    from monk.constraints import Trimmed
+
+    Trimmed().validate("hello world")
+
+    with pytest.raises(ValueError):
+        Trimmed().validate(" hello")
+    with pytest.raises(ValueError):
+        Trimmed().validate("world ")
+
+    with pytest.raises(TypeError):
+        Trimmed().validate(123)
+
+
+def test_past_future_constraints() -> None:
+    from monk.constraints import Past, Future
+
+    now = datetime.datetime.now()
+    past_dt = now - datetime.timedelta(days=1)
+    past_date = datetime.date.today() - datetime.timedelta(days=1)
+    future_dt = now + datetime.timedelta(days=1)
+    future_date = datetime.date.today() + datetime.timedelta(days=1)
+
+    Past().validate(past_dt)
+    Future().validate(future_dt)
+    Past().validate(datetime.date.today() - datetime.timedelta(days=1))
+    Future().validate(datetime.date.today() + datetime.timedelta(days=1))
+
+    with pytest.raises(ValueError, match="Must be in the past"):
+        Past().validate(future_dt)
+    with pytest.raises(ValueError, match="Must be in the past"):
+        Past().validate(future_date)
+    with pytest.raises(ValueError, match="Must be in the future"):
+        Future().validate(past_dt)
+    with pytest.raises(ValueError, match="Must be in the future"):
+        Future().validate(past_date)
+    with pytest.raises(TypeError, match="cannot be evaluated as a date/time"):
+        Past().validate("2024-01-01")
+    with pytest.raises(TypeError, match="cannot be evaluated as a date/time"):
+        Future().validate("2024-01-01")
 
 
 @monk(slots=True)
