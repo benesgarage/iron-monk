@@ -38,5 +38,8 @@ ENV/
 # Build tool (like uv or pip)
 *requirements.txt
 
+# MkDocs
+.cache/
+
 # iron-monk specific assets (if you want to ignore intermediate files)
 # Note: Do not ignore assets/monk.png as that is used in the README!
