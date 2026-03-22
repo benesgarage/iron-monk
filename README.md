@@ -98,6 +98,7 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
 
 | Metric                               | `iron-monk`<br>*(v0.16.1)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
 |--------------------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
+| **Package Size**                     | `0.04 MB`                  | `0.44 MB`                | `5.91 MB`                 | `0.21 MB`              | `0.17 MB`                    | `0.09 MB` |
 | **Cold Start**                       | `32.05ms`                  | `36.96ms`                | `61.59ms`                 | `38.78ms`              | `40.00ms`                    |
 | **Object Validation (100k)**         | `0.170s`                   | `0.012s`                 | `0.054s`                  | `0.083s`               | N/A                          |
 | **Dict Validation (100k)**           | `0.075s`                   | `0.055s`                 | `0.051s`                  | N/A                    | `0.410s`                     |
