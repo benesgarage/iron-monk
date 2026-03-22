@@ -197,7 +197,12 @@ IsNan = Predicate(math.isnan)
 IsInfinite = Predicate(math.isinf)
 NonNegative = Interval(ge=0)
 
-IsUTC = Predicate(lambda dt: dt.tzinfo is not None and dt.utcoffset() == datetime.timedelta(0))
+
+def _is_utc(dt: datetime.datetime) -> bool:
+    return dt.tzinfo is not None and dt.utcoffset() == datetime.timedelta(0)
+
+
+IsUTC = Predicate(_is_utc)
 
 
 @constraint
@@ -400,7 +405,7 @@ class Nested:
             object.__setattr__(self, "_validate_fn", validate_fn)
 
         try:
-            validate_fn(value, actual_schema, partial=self.partial)
+            validate_fn(value, cast(type, actual_schema), partial=self.partial)
         except ValidationError as e:
             # Adjust the error paths so they concatenate via dot-notation
             for err in e.errors:

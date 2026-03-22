@@ -257,7 +257,7 @@ def test_constraint_auto_instantiation_missing_args() -> None:
     with pytest.raises(TypeError):
 
         @monk
-        class FaultyAgent:
+        class FaultyAgent:  # pyright: ignore[reportUnusedClass]
             password: Annotated[str, StatefulConstraint]
 
 

@@ -12,7 +12,7 @@ from typing import (
     cast,
 )
 
-from .operations import validate, validate_arguments, validate_return, _extract_monk_metadata
+from .operations import validate, validate_arguments, validate_return, _extract_monk_metadata  # pyright: ignore[reportPrivateUsage]
 from .config import settings
 from .exceptions import UnvalidatedAccessError
 
@@ -130,7 +130,7 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
 
         # 2. Extract metadata from type hints once
         hints = get_type_hints(d_cls, include_extras=True)
-        rules = _extract_monk_metadata(hints)
+        rules = _extract_monk_metadata(hints)  # pyright: ignore[reportPrivateUsage]
 
         setattr(d_cls, "__monk_rules__", rules)
 

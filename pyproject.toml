@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iron-monk"
-version = "0.16.1"
+version = "0.16.2"
 description = "A minimalist, zero-coercion validation library for Python."
 readme = "README.md"
 authors = [
@@ -13,20 +13,23 @@ authors = [
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = []
-keywords = ["validation", "dataclass", "typing", "strict", "types"]
+keywords = ["validation", "dataclass", "typing", "strict", "types", "fast", "performance", "zero-dependencies", "api", "schema", "json", "dto"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "mypy", "ruff", "build", "mkdocs-material", "anyio"]
+dev = ["pytest", "pytest-cov", "mypy", "ruff", "build", "mkdocs-material", "anyio", "pyright"]
 
 [project.urls]
 Repository = "https://github.com/benesgarage/iron-monk"
@@ -43,3 +46,10 @@ line-length = 120
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"
+reportUnknownArgumentType = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false

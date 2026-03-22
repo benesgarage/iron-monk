@@ -20,8 +20,9 @@ lint: ## Run the Ruff linter
 format: ## Run the Ruff formatter
 	ruff format .
 
-typecheck: ## Run the MyPy type checker
+typecheck: ## Run the MyPy/pyright type checkers
 	mypy src/monk tests
+	pyright src/monk tests
 
 check: format lint typecheck test ## Run all formatters, linters, type checks, and tests
 

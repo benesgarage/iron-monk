@@ -23,7 +23,7 @@ _PRIMITIVE_TYPES = frozenset((str, int, float, bool, type(None)))
 
 def _prepare_constraints(constraints: Iterable[Any]) -> list[Any]:
     """Takes raw constraints (classes or instances) and prepares them for execution."""
-    field_rules = []
+    field_rules: list[Any] = []
     for m in constraints:
         # Auto-instantiate classes that implement the protocol but were passed as a type
         if isinstance(m, type) and issubclass(m, MonkConstraint):
@@ -281,14 +281,13 @@ def validate(instance: T) -> T:
 
     # Run cross-field validation ONLY if all field-level rules passed
     if not errors and hasattr(instance, "__monk_validate__"):
-        if inspect.iscoroutinefunction(instance.__monk_validate__) or inspect.isasyncgenfunction(
-            instance.__monk_validate__
-        ):
+        hook = getattr(instance, "__monk_validate__")
+        if inspect.iscoroutinefunction(hook) or inspect.isasyncgenfunction(hook):
             raise TypeError(
                 "iron-monk is strictly synchronous. Async __monk_validate__ hooks are not supported. Stateful validation (like DB lookups) should occur in your service layer after syntax validation."
             )
 
-        result = instance.__monk_validate__()
+        result = hook()
         _process_monk_validate_result(result, errors)
 
     if errors:
