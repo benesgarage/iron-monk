@@ -125,6 +125,9 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
         if dataclass_fields is not None:
             dataclass_fields.pop("__monk_safe__", None)
 
+        fields_tuple = tuple(f.name for f in dataclasses.fields(cast(Any, d_cls)))
+        setattr(d_cls, "__monk_fields__", fields_tuple)
+
         # 2. Extract metadata from type hints once
         hints = get_type_hints(d_cls, include_extras=True)
         rules = _extract_monk_metadata(hints)

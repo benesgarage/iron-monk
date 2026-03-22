@@ -1,10 +1,8 @@
-import dataclasses
 import functools
 import inspect
 from typing import (
     TypeVar,
     Any,
-    cast,
     Iterable,
     AsyncIterable,
     AsyncIterator,
@@ -19,6 +17,8 @@ from .config import settings
 from .protocols import MonkConstraint
 
 T = TypeVar("T")
+
+_PRIMITIVE_TYPES = frozenset((str, int, float, bool, type(None)))
 
 
 def _prepare_constraints(constraints: Iterable[Any]) -> list[Any]:
@@ -61,14 +61,23 @@ def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, list[MonkConstrai
     return rules
 
 
-def _is_nullable(c: Any) -> bool:
-    """Duck-type check to avoid circular imports."""
-    return getattr(c, "__name__", type(c).__name__) == "Nullable"
-
-
-def _is_not_null(c: Any) -> bool:
-    """Duck-type check to avoid circular imports."""
-    return getattr(c, "__name__", type(c).__name__) == "NotNull"
+def _recurse(val: Any, prefix: str, errors: list[ErrorDict]) -> None:
+    """Recursively validates nested Monk objects and bubbles up errors."""
+    if hasattr(val, "__monk_rules__"):
+        try:
+            validate(val)
+        except ValidationError as e:
+            for err in e.errors:
+                err["field"] = f"{prefix}.{err['field']}"
+                errors.append(err)
+    elif isinstance(val, (list, tuple, set)):
+        for i, item in enumerate(val):
+            if type(item) not in _PRIMITIVE_TYPES:
+                _recurse(item, f"{prefix}[{i}]", errors)
+    elif isinstance(val, dict):
+        for k, v in val.items():
+            if type(v) not in _PRIMITIVE_TYPES:
+                _recurse(v, f"{prefix}[{repr(k)}]", errors)
 
 
 def _validate_field_and_recurse(
@@ -80,22 +89,31 @@ def _validate_field_and_recurse(
     """Core validation loop shared by both dataclasses and function arguments."""
     if value is None:
         if constraints:
-            is_explicitly_nullable = any(_is_nullable(c) for c in constraints)
-            is_explicitly_not_null = any(_is_not_null(c) for c in constraints)
+            is_explicitly_nullable = False
+            is_explicitly_not_null = False
+            not_null_c = None
+
+            for c in constraints:
+                c_name = type(c).__name__
+                if c_name == "Nullable":
+                    is_explicitly_nullable = True
+                elif c_name == "NotNull":
+                    is_explicitly_not_null = True
+                    not_null_c = c
 
             allows_none = (
                 True if is_explicitly_nullable else (False if is_explicitly_not_null else settings.default_allow_none)
             )
 
             if not allows_none:
-                not_null_c = next((c for c in constraints if _is_not_null(c)), None)
                 msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
                 code = getattr(not_null_c, "code", None) or "NotNull"
                 errors.append({"field": field_name, "message": msg, "code": code})
         return
 
     for c in constraints:
-        if _is_nullable(c) or _is_not_null(c):
+        c_name = type(c).__name__
+        if c_name in ("Nullable", "NotNull"):
             continue
         try:
             c.validate(value)
@@ -104,26 +122,11 @@ def _validate_field_and_recurse(
                 err["field"] = f"{field_name}{err.get('field', '')}"
                 errors.append(err)
         except (ValueError, TypeError) as e:
-            error_code = getattr(c, "code", None) or type(c).__name__
+            error_code = getattr(c, "code", None) or c_name
             errors.append({"field": field_name, "message": str(e), "code": error_code})
 
-    # Helper function to recursively validate nested Monk objects and bubble up errors
-    def _recurse(val: Any, prefix: str) -> None:
-        if hasattr(val, "__monk_rules__"):
-            try:
-                validate(val)
-            except ValidationError as e:
-                for err in e.errors:
-                    err["field"] = f"{prefix}.{err['field']}"
-                    errors.append(err)
-        elif isinstance(val, (list, tuple, set)):
-            for i, item in enumerate(val):
-                _recurse(item, f"{prefix}[{i}]")
-        elif isinstance(val, dict):
-            for k, v in val.items():
-                _recurse(v, f"{prefix}[{repr(k)}]")
-
-    _recurse(value, field_name)
+    if type(value) not in _PRIMITIVE_TYPES:
+        _recurse(value, field_name, errors)
 
 
 def validate_arguments(arguments: dict[str, Any], rules: dict[str, list[Any]]) -> None:
@@ -161,7 +164,8 @@ def validate_dict(
     errors: list[ErrorDict] = []
 
     if not drop_extra_keys:
-        extra_keys = set(data.keys()) - allowed_keys
+        # Using data.keys() view is much faster than instantiating a new set() object
+        extra_keys = data.keys() - allowed_keys
         if extra_keys:
             errors.append(
                 {
@@ -263,14 +267,17 @@ def validate(instance: T) -> T:
         raise TypeError(f"Object of type {type(instance).__name__} is not a valid Monk dataclass.")
 
     errors: list[ErrorDict] = []
-    rules = getattr(instance, "__monk_rules__", {})
+    rules = object.__getattribute__(instance, "__monk_rules__")
+    fields = object.__getattribute__(instance, "__monk_fields__")
 
-    for field_info in dataclasses.fields(cast(Any, instance)):
-        field_name = field_info.name
+    for field_name in fields:
         value = object.__getattribute__(instance, field_name)
-        constraints = rules.get(field_name, [])
+        constraints = rules.get(field_name)
 
-        _validate_field_and_recurse(field_name, value, constraints, errors)
+        if constraints:
+            _validate_field_and_recurse(field_name, value, constraints, errors)
+        elif type(value) not in _PRIMITIVE_TYPES:
+            _recurse(value, field_name, errors)
 
     # Run cross-field validation ONLY if all field-level rules passed
     if not errors and hasattr(instance, "__monk_validate__"):
