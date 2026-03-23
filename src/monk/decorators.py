@@ -33,9 +33,19 @@ def constraint(*, frozen: bool = True, slots: bool = True, **kwargs: Any) -> Cal
 def constraint(
     cls: type[T] | None = None, *, frozen: bool = True, slots: bool = True, **kwargs: Any
 ) -> type[T] | Callable[[type[T]], type[T]]:
-    """
-    Convenience decorator for custom constraints.
+    """Convenience decorator for custom constraints.
+
     Creates a high-performance dataclass (frozen and slotted by default).
+    Intercepts the validation method to safely inject and format custom error messages.
+
+    Args:
+        cls: The class to decorate.
+        frozen (bool): Whether the resulting dataclass should be frozen. Defaults to True.
+        slots (bool): Whether the resulting dataclass should use __slots__. Defaults to True.
+        **kwargs: Additional keyword arguments passed to dataclasses.dataclass.
+
+    Returns:
+        The transformed constraint class.
     """
     kwargs["frozen"] = frozen
     kwargs["slots"] = slots
@@ -83,9 +93,20 @@ def monk(obj: Callable[P, R]) -> Callable[P, R]: ...
 
 @dataclass_transform()
 def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any) -> Any:
-    """
-    The primary decorator for iron-monk.
-    Transforms a class into a validated, guarded dataclass, OR validates function arguments.
+    """The primary decorator for iron-monk.
+
+    Transforms a class into a validated, guarded dataclass, OR validates function arguments and return values.
+
+    Args:
+        obj: The class or function to decorate.
+        defer (bool | None): Whether to defer validation until `validate()` is called. Defaults to the global setting.
+        **dataclass_kwargs: Additional keyword arguments passed to dataclasses.dataclass when decorating a class.
+
+    Returns:
+        The wrapped class or function.
+
+    Raises:
+        TypeError: If the decorated object is neither a class nor a function.
     """
 
     def _wrap_class(original_cls: type[T]) -> type[T]:

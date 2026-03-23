@@ -24,7 +24,7 @@ We draw a strict line between *Type Checking* ("Does this value match the Python
 
 `iron-monk` focuses entirely on the latter. By skipping deep runtime type-checking, it operates perfectly as a standalone validator or stacks flawlessly alongside dedicated tools like `beartype` or `typeguard`.
 
-To configure how `iron-monk` handles missing data (nullability), see [Required vs. Optional Fields](core_concepts.md#required-vs-optional-fields) and [Relying on Runtime Type Checkers](core_concepts.md#relying-on-runtime-type-checkers).
+To configure how `iron-monk` handles missing data (nullability), see [Required vs. Optional Fields](core_concepts.md#required-vs-optional-fields).
 
 ## Getting Started
 

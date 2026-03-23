@@ -159,7 +159,20 @@ def _get_schema_rules(schema: type) -> tuple[set[str], dict[str, list[MonkConstr
 def validate_dict(
     data: dict[str, Any], schema: type, *, partial: bool = False, drop_extra_keys: bool = False
 ) -> dict[str, Any]:
-    """Validates a raw dictionary against a TypedDict or Dataclass schema without instantiating an object."""
+    """Validates a raw dictionary against a TypedDict or Dataclass schema without instantiating an object.
+
+    Args:
+        data (dict[str, Any]): The raw dictionary payload to validate.
+        schema (type): The TypedDict or Dataclass schema containing the validation rules.
+        partial (bool, optional): If True, ignores keys that are missing from the payload (useful for PATCH requests). Defaults to False.
+        drop_extra_keys (bool, optional): If True, strips any keys not explicitly defined in the schema. Defaults to False.
+
+    Returns:
+        dict[str, Any]: The validated (and optionally sanitized) dictionary.
+
+    Raises:
+        ValidationError: If the dictionary fails any validation constraints or contains unrecognized keys (when drop_extra_keys is False).
+    """
     allowed_keys, rules = _get_schema_rules(schema)
     errors: list[ErrorDict] = []
 
@@ -193,9 +206,19 @@ def validate_dict(
 
 
 def validate_stream(stream: Iterable[Any], *constraints: Any) -> Iterator[Any]:
-    """
-    Lazily validates an iterable/generator on the fly without consuming it entirely.
-    Yields items one by one, raising a ValidationError if an item fails.
+    """Lazily validates an iterable/generator on the fly without consuming it entirely.
+
+    Yields items one by one, raising a ValidationError instantly if an item fails.
+
+    Args:
+        stream (Iterable[Any]): The iterable or generator to validate.
+        *constraints (Any): A variable number of constraint instances or classes to apply to each item.
+
+    Yields:
+        Any: The original item from the stream, assuming it passed validation.
+
+    Raises:
+        ValidationError: If any individual item fails validation.
     """
     prepared = _prepare_constraints(constraints)
 
@@ -208,9 +231,19 @@ def validate_stream(stream: Iterable[Any], *constraints: Any) -> Iterator[Any]:
 
 
 async def validate_async_stream(stream: AsyncIterable[Any], *constraints: Any) -> AsyncIterator[Any]:
-    """
-    Lazily validates an async iterable/generator on the fly without consuming it entirely.
-    Yields items one by one, raising a ValidationError if an item fails.
+    """Lazily validates an async iterable/generator on the fly without consuming it entirely.
+
+    Yields items one by one, raising a ValidationError instantly if an item fails.
+
+    Args:
+        stream (AsyncIterable[Any]): The asynchronous iterable or generator to validate.
+        *constraints (Any): A variable number of constraint instances or classes to apply to each item.
+
+    Yields:
+        Any: The original item from the async stream, assuming it passed validation.
+
+    Raises:
+        ValidationError: If any individual item fails validation.
     """
     prepared = _prepare_constraints(constraints)
 
@@ -259,9 +292,20 @@ def _process_monk_validate_result(result: Any, errors: list[ErrorDict]) -> None:
 
 
 def validate(instance: T) -> T:
-    """
-    Validates a Monk dataclass instance.
-    Returns the instance so it can be used inline or reassigned.
+    """Validates a Monk dataclass instance.
+
+    Executes all field-level constraints. If all field-level constraints pass, it then executes
+    the model-level `__monk_validate__` hook if present. Returns the instance so it can be used inline or reassigned.
+
+    Args:
+        instance (T): The instantiated Monk dataclass to validate.
+
+    Returns:
+        T: The validated dataclass instance, which is now fully unlocked for attribute access.
+
+    Raises:
+        TypeError: If the provided instance is not a valid Monk dataclass, or if an async cross-field hook is used.
+        ValidationError: If the instance fails validation.
     """
     if not hasattr(instance, "__monk_rules__"):
         raise TypeError(f"Object of type {type(instance).__name__} is not a valid Monk dataclass.")

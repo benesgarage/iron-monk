@@ -28,7 +28,17 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "mypy", "ruff", "build", "mkdocs-material", "anyio", "pyright"]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "mypy",
+    "ruff",
+    "build",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "anyio",
+    "pyright"
+]
 integrations = [
     "beartype",
     "tyro",

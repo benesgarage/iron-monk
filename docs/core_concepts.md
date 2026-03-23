@@ -38,7 +38,7 @@ except ValidationError as e:
     print(e.errors) 
 ```
 
-> 💡 Tip: Prefer objects to crash instantly on bad data? See [Fail-Fast](core_concepts.md#fail-fast) Mode.
+> 💡 Tip: Prefer objects to crash instantly on bad data? See [Fail-Fast](core_concepts.md#fail-fast-mode) Mode.
 
 ## Handling Errors
 

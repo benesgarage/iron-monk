@@ -37,6 +37,7 @@ nav:
   - Core Concepts: core_concepts.md
   - The Constraint Toolkit: constraints.md
   - Performance & Benchmarks: benchmarks.md
+  - API Reference: api_reference.md
   - Advanced Usage:
       - Overview: advanced.md
       - Dicts, Streams, & Execution: advanced/execution.md
@@ -56,3 +57,16 @@ nav:
       - Data & ORMs:
         - SQLAlchemy 2.0: examples/sqlalchemy.md
         - Tortoise ORM: examples/tortoise_orm.md
+
+markdown_extensions:
+  - admonition
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
+            show_root_heading: true
+            heading_level: 3
