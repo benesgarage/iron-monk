@@ -31,6 +31,7 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
+  - admonition
 
 nav:
   - Home: index.md
@@ -57,9 +58,6 @@ nav:
       - Data & ORMs:
         - SQLAlchemy 2.0: examples/sqlalchemy.md
         - Tortoise ORM: examples/tortoise_orm.md
-
-markdown_extensions:
-  - admonition
 
 plugins:
   - search
