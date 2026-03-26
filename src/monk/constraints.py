@@ -848,3 +848,46 @@ class MacAddress:
                 raise ValueError("Must be a valid MAC address.")
         except TypeError:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a MAC address.")
+
+
+class CSV:
+    """Validates a delimited string and applies constraints to each extracted element."""
+
+    def __init__(
+        self,
+        *constraints: Any,
+        separator: str = ",",
+        strip: bool = True,
+        message: str | None = None,
+        code: str | None = None,
+    ) -> None:
+        self.separator = separator
+        self.strip = strip
+        self.message = message
+        self.code = code
+        # Safely instantiate any uninstantiated classes (e.g., LowerCase vs LowerCase())
+        self._prepared = [c() if isinstance(c, type) else c for c in constraints]
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as a CSV string.")
+
+        if not value:
+            return
+
+        errors: list[ErrorDict] = []
+        for i, item in enumerate(value.split(self.separator)):
+            val = item.strip() if self.strip else item
+            for c in self._prepared:
+                try:
+                    c.validate(val)
+                except ValidationError as e:
+                    for err in e.errors:
+                        err["field"] = f"[{i}]{err.get('field', '')}"
+                        errors.append(err)
+                except (ValueError, TypeError) as e:
+                    error_code = getattr(c, "code", None) or type(c).__name__
+                    errors.append({"field": f"[{i}]", "message": str(e), "code": error_code})
+
+        if errors:
+            raise ValidationError(errors)

@@ -8,7 +8,12 @@ from monk.constraints import (
     LatLong,
     Port,
     MacAddress,
+    Interval,
+    CSV,
+    LowerCase,
+    Len,
 )
+from monk.exceptions import ValidationError
 
 
 def test_slug_constraint() -> None:
@@ -140,3 +145,43 @@ def test_macaddress_constraint() -> None:
 
     with pytest.raises(TypeError):
         constraint.validate(123)
+
+
+def test_csv_constraint() -> None:
+    constraint = CSV(LowerCase, Len(min_len=2), separator=",", strip=True)
+
+    constraint.validate("ab")
+    constraint.validate("")  # Empty string passes gracefully
+
+    # Failure (Aggregates multiple errors across the string)
+    with pytest.raises(ValidationError) as exc:
+        constraint.validate("abc, d, GHI")
+
+    errors = exc.value.errors
+    assert len(errors) == 2
+    # 'd' fails Len
+    assert errors[0]["field"] == "[1]"
+    assert errors[0]["code"] == "Len"
+    # 'GHI' fails LowerCase
+    assert errors[1]["field"] == "[2]"
+    assert errors[1]["code"] == "Predicate"  # LowerCase is a Predicate
+
+    # Type Error
+    with pytest.raises(TypeError):
+        constraint.validate(123)
+
+    # Incompatible constraint
+    constraint = CSV(Interval(ge=2), separator=",", strip=True)
+    with pytest.raises(ValidationError) as exc2:
+        constraint.validate("123, 456")
+    assert exc2.value.errors[0]["code"] == "Interval"
+
+    # Nested CSV to trigger the ValidationError aggregation block
+    nested_csv = CSV(CSV(Len(min_len=3), separator="|"), separator=",")
+    with pytest.raises(ValidationError) as exc_nested:
+        nested_csv.validate("ab|cde, fgh|i")
+
+    nested_errors = exc_nested.value.errors
+    assert len(nested_errors) == 2
+    assert nested_errors[0]["field"] == "[0][0]"  # 'ab' fails Len (index 0 outer, index 0 inner)
+    assert nested_errors[1]["field"] == "[1][1]"  # 'i' fails Len (index 1 outer, index 1 inner)
