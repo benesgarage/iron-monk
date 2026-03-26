@@ -857,12 +857,12 @@ class CSV:
         self,
         *constraints: Any,
         separator: str = ",",
-        strip: bool = True,
+        unique: bool = False,
         message: str | None = None,
         code: str | None = None,
     ) -> None:
         self.separator = separator
-        self.strip = strip
+        self.unique = unique
         self.message = message
         self.code = code
         # Safely instantiate any uninstantiated classes (e.g., LowerCase vs LowerCase())
@@ -876,8 +876,15 @@ class CSV:
             return
 
         errors: list[ErrorDict] = []
-        for i, item in enumerate(value.split(self.separator)):
-            val = item.strip() if self.strip else item
+        seen: set[str] = set()
+
+        for i, val in enumerate(value.split(self.separator)):
+            if self.unique:
+                if val in seen:
+                    errors.append({"field": f"[{i}]", "message": "All elements must be unique.", "code": "Unique"})
+                else:
+                    seen.add(val)
+
             for c in self._prepared:
                 try:
                     c.validate(val)

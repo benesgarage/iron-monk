@@ -148,14 +148,15 @@ def test_macaddress_constraint() -> None:
 
 
 def test_csv_constraint() -> None:
-    constraint = CSV(LowerCase, Len(min_len=2), separator=",", strip=True)
+    constraint = CSV(LowerCase, Len(min_len=2), separator=",")
 
+    constraint.validate("abc,def,ghi")
     constraint.validate("ab")
     constraint.validate("")  # Empty string passes gracefully
 
     # Failure (Aggregates multiple errors across the string)
     with pytest.raises(ValidationError) as exc:
-        constraint.validate("abc, d, GHI")
+        constraint.validate("abc,d,GHI")
 
     errors = exc.value.errors
     assert len(errors) == 2
@@ -171,17 +172,32 @@ def test_csv_constraint() -> None:
         constraint.validate(123)
 
     # Incompatible constraint
-    constraint = CSV(Interval(ge=2), separator=",", strip=True)
+    constraint = CSV(Interval(ge=2), separator=",")
     with pytest.raises(ValidationError) as exc2:
-        constraint.validate("123, 456")
+        constraint.validate("123,456")
     assert exc2.value.errors[0]["code"] == "Interval"
 
     # Nested CSV to trigger the ValidationError aggregation block
     nested_csv = CSV(CSV(Len(min_len=3), separator="|"), separator=",")
     with pytest.raises(ValidationError) as exc_nested:
-        nested_csv.validate("ab|cde, fgh|i")
+        nested_csv.validate("ab|cde,fgh|i")
 
     nested_errors = exc_nested.value.errors
     assert len(nested_errors) == 2
     assert nested_errors[0]["field"] == "[0][0]"  # 'ab' fails Len (index 0 outer, index 0 inner)
     assert nested_errors[1]["field"] == "[1][1]"  # 'i' fails Len (index 1 outer, index 1 inner)
+
+
+def test_csv_constraint_unique() -> None:
+    from monk.constraints import CSV
+
+    constraint = CSV(separator=",", unique=True)
+
+    constraint.validate("apple,banana,orange")
+
+    with pytest.raises(ValidationError) as exc:
+        constraint.validate("apple,banana,apple")
+
+    assert exc.value.errors[0]["field"] == "[2]"
+    assert exc.value.errors[0]["code"] == "Unique"
+    assert "unique" in exc.value.errors[0]["message"]

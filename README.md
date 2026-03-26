@@ -96,7 +96,7 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
  
  *Tested on Python 3.13, executing 100,000 simple primitive validations.*
 
-| Metric                               | `iron-monk`<br>*(v0.17.0)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
+| Metric                               | `iron-monk`<br>*(v0.18.0)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
 |--------------------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
 | **Package Size**                     | `0.04 MB`                  | `0.44 MB`                | `5.91 MB`                 | `0.21 MB`              | `0.17 MB`                    | `0.09 MB` |
 | **Cold Start**                       | `32.05ms`                  | `36.96ms`                | `61.59ms`                 | `38.78ms`              | `40.00ms`                    |
