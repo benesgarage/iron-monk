@@ -5,13 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+ ## [0.18.1]
+ 
+ ### Fixed
+ - **PEP 561 Compliance:** Added the `py.typed` marker file so external type checkers (like MyPy and Pyright) natively recognize type hints when installed in downstream projects.
+
  ## [0.18.0]
  
  ### Changed (Breaking)
  - **CSV Coercion Removed:** Removed the `strip` parameter from the `CSV` constraint to strictly enforce the library's "Zero Coercion" philosophy. The constraint now accurately evaluates the exact literal substrings produced by `.split()`.
  - **CSV Error Aggregation:** The `CSV` constraint now holistically aggregates multiple errors and raises a `ValidationError` (matching the behavior of `Each`), instead of failing fast with a `ValueError`.
  - **CSV Uniqueness:** Added the `unique=True` flag to the `CSV` constraint to safely validate element uniqueness across the string without character-level traversal bugs.
-
 
 ## [0.17.1]
 
