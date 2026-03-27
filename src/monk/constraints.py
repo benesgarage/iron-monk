@@ -739,6 +739,22 @@ class Trimmed:
 
 
 @constraint
+class IsISO8601:
+    """Validates that a string is a valid ISO 8601 date or datetime."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as an ISO 8601 string.")
+        try:
+            datetime.datetime.fromisoformat(value)
+        except ValueError:
+            raise ValueError("Must be a valid ISO 8601 string.")
+
+
+@constraint
 class Past:
     """Validates that a datetime or date is in the past."""
 

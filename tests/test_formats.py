@@ -9,6 +9,7 @@ from monk.constraints import (
     Port,
     MacAddress,
     Interval,
+    IsISO8601,
     CSV,
     LowerCase,
     Len,
@@ -145,6 +146,28 @@ def test_macaddress_constraint() -> None:
 
     with pytest.raises(TypeError):
         constraint.validate(123)
+
+
+def test_is_iso8601_constraint() -> None:
+    constraint = IsISO8601()
+
+    # Success
+    constraint.validate("2024-01-01")
+    constraint.validate("2024-01-01T15:30:00")
+    constraint.validate("2024-01-01T15:30:00Z")
+    constraint.validate("2024-01-01T15:30:00+02:00")
+
+    # Failure
+    with pytest.raises(ValueError):
+        constraint.validate("2024/01/01")
+    with pytest.raises(ValueError):
+        constraint.validate("not a date")
+
+    # Type Error (must be a string, not an already parsed datetime!)
+    import datetime
+
+    with pytest.raises(TypeError):
+        constraint.validate(datetime.datetime.now())
 
 
 def test_csv_constraint() -> None:

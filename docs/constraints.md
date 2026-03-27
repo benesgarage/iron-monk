@@ -160,7 +160,7 @@ import pathlib
 from typing import Annotated
 
 from monk import monk
-from monk.constraints import Predicate, Not, IsFile, IsDir, LowerCase, IsUTC, Past, Future
+from monk.constraints import Predicate, Not, IsFile, IsDir, LowerCase, IsUTC, Past, Future, IsISO8601
 
 def is_even(n: int) -> bool:
     return n % 2 == 0
@@ -179,6 +179,9 @@ class SystemConfig:
     # Temporal directions
     dob: Annotated[datetime.date, Past]
     expires_at: Annotated[datetime.datetime, Future]
+    
+    # Validates an ISO 8601 string without coercing it into a datetime object
+    raw_timestamp: Annotated[str, IsISO8601]
     
     # Validate that a string or pathlib.Path actually exists on the filesystem
     config_file: Annotated[pathlib.Path, IsFile]
