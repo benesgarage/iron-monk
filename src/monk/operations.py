@@ -21,136 +21,155 @@ T = TypeVar("T")
 _PRIMITIVE_TYPES = frozenset((str, int, float, bool, type(None)))
 
 
-def _prepare_constraints(constraints: Iterable[Any]) -> list[Any]:
-    """Takes raw constraints (classes or instances) and prepares them for execution."""
-    field_rules: list[Any] = []
+def _prepare_constraints(constraints: Iterable[Any]) -> tuple[list[MonkConstraint], bool, bool, Any]:
+    """Takes raw constraints and compiles them into a highly optimized validation tuple."""
+    actual_constraints: list[MonkConstraint] = []
+    is_nullable = False
+    is_not_null = False
+    not_null_c = None
+
     for m in constraints:
-        # Auto-instantiate classes that implement the protocol but were passed as a type
         if isinstance(m, type) and issubclass(m, MonkConstraint):
             try:
-                field_rules.append(m())
+                m = m()
             except TypeError as e:
                 raise TypeError(
                     f"Constraint '{m.__name__}' missing required arguments. Did you mean {m.__name__}(...)?"
                 ) from e
-        elif isinstance(m, MonkConstraint):
-            field_rules.append(m)
-    return field_rules
+
+        if not isinstance(m, MonkConstraint):
+            continue
+
+        c_name = type(m).__name__
+        if c_name == "Nullable":
+            is_nullable = True
+        elif c_name == "NotNull":
+            is_not_null = True
+            not_null_c = m
+        else:
+            actual_constraints.append(m)
+
+    return actual_constraints, is_nullable, is_not_null, not_null_c
 
 
-def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, list[MonkConstraint]]:
-    """Extracts validation rules from type hints."""
-    rules: dict[str, list[MonkConstraint]] = {}
+def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, tuple[list[MonkConstraint], bool, bool, Any]]:
+    """Extracts validation rules from type hints into highly optimized structures."""
+    rules: dict[str, tuple[list[MonkConstraint], bool, bool, Any]] = {}
 
     for name, hint in hints.items():
-        # Look for our specific MonkConstraint in Annotated metadata
         metadata = getattr(hint, "__metadata__", [])
 
-        # Support framework wrappers (like SQLAlchemy's Mapped[Annotated[...]])
         if not metadata:
             args = get_args(hint)
             origin = get_origin(hint)
-            # Only unwrap if it's not a standard collection (collections use Each constraint)
             if args and origin not in (list, set, frozenset, tuple, dict):
                 metadata = getattr(args[0], "__metadata__", [])
 
-        field_rules = _prepare_constraints(metadata)
-        if field_rules:
-            rules[name] = field_rules
+        if metadata:
+            compiled_rules = _prepare_constraints(metadata)
+            # Only store it if there are actual constraints or nullability overrides
+            if compiled_rules[0] or compiled_rules[1] or compiled_rules[2]:
+                rules[name] = compiled_rules
 
     return rules
 
 
 def _recurse(val: Any, prefix: str, errors: list[ErrorDict]) -> None:
     """Recursively validates nested Monk objects and bubbles up errors."""
-    if hasattr(val, "__monk_rules__"):
+    # getattr(..., None) is faster than hasattr + getattr
+    if getattr(val, "__monk_rules__", None) is not None:
         try:
             validate(val)
         except ValidationError as e:
             for err in e.errors:
                 err["field"] = f"{prefix}.{err['field']}"
                 errors.append(err)
-    elif isinstance(val, (list, tuple, set)):
+        return
+
+    # Exact type checking is significantly faster than isinstance abstract base class checks
+    val_type = type(val)
+    if val_type is list or val_type is tuple:
         for i, item in enumerate(val):
             if type(item) not in _PRIMITIVE_TYPES:
                 _recurse(item, f"{prefix}[{i}]", errors)
-    elif isinstance(val, dict):
+    elif val_type is dict:
         for k, v in val.items():
             if type(v) not in _PRIMITIVE_TYPES:
                 _recurse(v, f"{prefix}[{repr(k)}]", errors)
+    elif val_type is set or val_type is frozenset:  # Cannot be indexed
+        for item in val:
+            if type(item) not in _PRIMITIVE_TYPES:
+                _recurse(item, prefix, errors)
 
 
-def _validate_field_and_recurse(
-    field_name: str,
-    value: Any,
-    constraints: list[Any],
-    errors: list[ErrorDict],
+def validate_arguments(
+    arguments: dict[str, Any], rules: dict[str, tuple[list[MonkConstraint], bool, bool, Any]]
 ) -> None:
-    """Core validation loop shared by both dataclasses and function arguments."""
-    if value is None:
-        if constraints:
-            is_explicitly_nullable = False
-            is_explicitly_not_null = False
-            not_null_c = None
-
-            for c in constraints:
-                c_name = type(c).__name__
-                if c_name == "Nullable":
-                    is_explicitly_nullable = True
-                elif c_name == "NotNull":
-                    is_explicitly_not_null = True
-                    not_null_c = c
-
-            allows_none = (
-                True if is_explicitly_nullable else (False if is_explicitly_not_null else settings.default_allow_none)
-            )
-
-            if not allows_none:
-                msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
-                code = getattr(not_null_c, "code", None) or "NotNull"
-                errors.append({"field": field_name, "message": msg, "code": code})
-        return
-
-    for c in constraints:
-        c_name = type(c).__name__
-        if c_name in ("Nullable", "NotNull"):
-            continue
-        try:
-            c.validate(value)
-        except ValidationError as e:
-            for err in e.errors:
-                err["field"] = f"{field_name}{err.get('field', '')}"
-                errors.append(err)
-        except (ValueError, TypeError) as e:
-            error_code = getattr(c, "code", None) or c_name
-            errors.append({"field": field_name, "message": str(e), "code": error_code})
-
-    if type(value) not in _PRIMITIVE_TYPES:
-        _recurse(value, field_name, errors)
-
-
-def validate_arguments(arguments: dict[str, Any], rules: dict[str, list[Any]]) -> None:
     """Validates a dictionary of function arguments against extracted constraints."""
     errors: list[ErrorDict] = []
     for arg_name, value in arguments.items():
-        constraints = rules.get(arg_name, [])
-        _validate_field_and_recurse(arg_name, value, constraints, errors)
+        rule_tuple = rules.get(arg_name)
+        if rule_tuple:
+            constraints, is_nullable, is_not_null, not_null_c = rule_tuple
+
+            if value is None:
+                if not is_nullable and (is_not_null or not settings.default_allow_none):
+                    msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
+                    code = getattr(not_null_c, "code", None) or "NotNull"
+                    errors.append({"field": arg_name, "message": msg, "code": code})
+                continue
+
+            for c in constraints:
+                try:
+                    c.validate(value)
+                except ValidationError as e:
+                    for err in e.errors:
+                        err["field"] = f"{arg_name}{err.get('field', '')}"
+                        errors.append(err)
+                except (ValueError, TypeError) as e:
+                    error_code = getattr(c, "code", None) or type(c).__name__
+                    errors.append({"field": arg_name, "message": str(e), "code": error_code})
+
+            if type(value) not in _PRIMITIVE_TYPES:
+                _recurse(value, arg_name, errors)
+        elif type(value) not in _PRIMITIVE_TYPES:
+            _recurse(value, arg_name, errors)
 
     if errors:
         raise ValidationError(errors)
 
 
-def validate_return(value: Any, constraints: list[Any]) -> None:
+def validate_return(value: Any, rule_tuple: tuple[list[MonkConstraint], bool, bool, Any]) -> None:
     """Validates a function's return value against extracted constraints."""
     errors: list[ErrorDict] = []
-    _validate_field_and_recurse("return", value, constraints, errors)
+    constraints, is_nullable, is_not_null, not_null_c = rule_tuple
+
+    if value is None:
+        if not is_nullable and (is_not_null or not settings.default_allow_none):
+            msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
+            code = getattr(not_null_c, "code", None) or "NotNull"
+            errors.append({"field": "return", "message": msg, "code": code})
+    else:
+        for c in constraints:
+            try:
+                c.validate(value)
+            except ValidationError as e:
+                for err in e.errors:
+                    err["field"] = f"return{err.get('field', '')}"
+                    errors.append(err)
+            except (ValueError, TypeError) as e:
+                error_code = getattr(c, "code", None) or type(c).__name__
+                errors.append({"field": "return", "message": str(e), "code": error_code})
+
+        if type(value) not in _PRIMITIVE_TYPES:
+            _recurse(value, "return", errors)
 
     if errors:
         raise ValidationError(errors)
 
 
 @functools.lru_cache(maxsize=None)
-def _get_schema_rules(schema: type) -> tuple[set[str], dict[str, list[MonkConstraint]]]:
+def _get_schema_rules(schema: type) -> tuple[set[str], dict[str, tuple[list[MonkConstraint], bool, bool, Any]]]:
     """Caches the allowed keys and extracted rules for a given TypedDict schema to maximize performance."""
     hints = get_type_hints(schema, include_extras=True)
     return set(hints.keys()), _extract_monk_metadata(hints)
@@ -188,13 +207,32 @@ def validate_dict(
                 }
             )
 
-    # We iterate over the SCHEMA rules to catch missing required fields
-    for field_name, constraints in rules.items():
+    for field_name, rule_tuple in rules.items():
         if partial and field_name not in data:
             continue
 
         value = data.get(field_name)
-        _validate_field_and_recurse(field_name, value, constraints, errors)
+        constraints, is_nullable, is_not_null, not_null_c = rule_tuple
+
+        if value is None:
+            if not is_nullable and (is_not_null or not settings.default_allow_none):
+                msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
+                code = getattr(not_null_c, "code", None) or "NotNull"
+                errors.append({"field": field_name, "message": msg, "code": code})
+            continue
+
+        for c in constraints:
+            try:
+                c.validate(value)
+            except ValidationError as e:
+                for err in e.errors:
+                    err["field"] = f"{field_name}{err.get('field', '')}"
+                    errors.append(err)
+            except (ValueError, TypeError) as e:
+                error_code = getattr(c, "code", None) or type(c).__name__
+                errors.append({"field": field_name, "message": str(e), "code": error_code})
+
+        # NOTE: _recurse is intentionally omitted here to prevent O(N) useless tree walks on raw JSON
 
     if errors:
         raise ValidationError(errors)
@@ -203,6 +241,38 @@ def validate_dict(
         return {k: v for k, v in data.items() if k in allowed_keys}
 
     return data
+
+
+def _prepare_stream_constraints(constraints: Iterable[Any]) -> list[MonkConstraint]:
+    """Safely instantiates and filters constraints specifically for streams."""
+    prepared: list[MonkConstraint] = []
+    for c in constraints:
+        if isinstance(c, type) and issubclass(c, MonkConstraint):
+            try:
+                c = c()
+            except TypeError as e:
+                raise TypeError(
+                    f"Constraint '{c.__name__}' missing required arguments. Did you mean {c.__name__}(...)?"
+                ) from e
+        if isinstance(c, MonkConstraint):
+            prepared.append(c)
+    return prepared
+
+
+def _validate_stream_item(item: Any, constraints: list[MonkConstraint], errors: list[ErrorDict]) -> None:
+    """A simplified validation loop specifically for stream items."""
+    if item is None:
+        # Stream items are always considered required unless Nullable is present
+        if not any(type(c).__name__ == "Nullable" for c in constraints):
+            errors.append({"field": "", "message": "Stream items cannot be null.", "code": "NotNull"})
+        return
+
+    for c in constraints:
+        try:
+            c.validate(item)
+        except (ValueError, TypeError) as e:
+            error_code = getattr(c, "code", None) or type(c).__name__
+            errors.append({"field": "", "message": str(e), "code": error_code})
 
 
 def validate_stream(stream: Iterable[Any], *constraints: Any) -> Iterator[Any]:
@@ -220,12 +290,14 @@ def validate_stream(stream: Iterable[Any], *constraints: Any) -> Iterator[Any]:
     Raises:
         ValidationError: If any individual item fails validation.
     """
-    prepared = _prepare_constraints(constraints)
+    prepared_constraints = _prepare_stream_constraints(constraints)
 
     for i, item in enumerate(stream):
         errors: list[ErrorDict] = []
-        _validate_field_and_recurse(f"[{i}]", item, prepared, errors)
+        _validate_stream_item(item, prepared_constraints, errors)
         if errors:
+            for err in errors:
+                err["field"] = f"[{i}]{err['field']}"
             raise ValidationError(errors)
         yield item
 
@@ -245,13 +317,15 @@ async def validate_async_stream(stream: AsyncIterable[Any], *constraints: Any) -
     Raises:
         ValidationError: If any individual item fails validation.
     """
-    prepared = _prepare_constraints(constraints)
+    prepared_constraints = _prepare_stream_constraints(constraints)
 
     i = 0
     async for item in stream:
         errors: list[ErrorDict] = []
-        _validate_field_and_recurse(f"[{i}]", item, prepared, errors)
+        _validate_stream_item(item, prepared_constraints, errors)
         if errors:
+            for err in errors:
+                err["field"] = f"[{i}]{err['field']}"
             raise ValidationError(errors)
         yield item
         i += 1
@@ -307,7 +381,7 @@ def validate(instance: T) -> T:
         TypeError: If the provided instance is not a valid Monk dataclass, or if an async cross-field hook is used.
         ValidationError: If the instance fails validation.
     """
-    if not hasattr(instance, "__monk_rules__"):
+    if getattr(instance, "__monk_rules__", None) is None:
         raise TypeError(f"Object of type {type(instance).__name__} is not a valid Monk dataclass.")
 
     errors: list[ErrorDict] = []
@@ -316,23 +390,42 @@ def validate(instance: T) -> T:
 
     for field_name in fields:
         value = object.__getattribute__(instance, field_name)
-        constraints = rules.get(field_name)
+        rule_tuple = rules.get(field_name)
 
-        if constraints:
-            _validate_field_and_recurse(field_name, value, constraints, errors)
+        if rule_tuple:
+            constraints, is_nullable, is_not_null, not_null_c = rule_tuple
+
+            if value is None:
+                if not is_nullable and (is_not_null or not settings.default_allow_none):
+                    msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
+                    code = getattr(not_null_c, "code", None) or "NotNull"
+                    errors.append({"field": field_name, "message": msg, "code": code})
+                continue
+
+            for c in constraints:
+                try:
+                    c.validate(value)
+                except ValidationError as e:
+                    for err in e.errors:
+                        err["field"] = f"{field_name}{err.get('field', '')}"
+                        errors.append(err)
+                except (ValueError, TypeError) as e:
+                    error_code = getattr(c, "code", None) or type(c).__name__
+                    errors.append({"field": field_name, "message": str(e), "code": error_code})
+
+            if type(value) not in _PRIMITIVE_TYPES:
+                _recurse(value, field_name, errors)
         elif type(value) not in _PRIMITIVE_TYPES:
             _recurse(value, field_name, errors)
 
-    # Run cross-field validation ONLY if all field-level rules passed
-    if not errors and hasattr(instance, "__monk_validate__"):
-        hook = getattr(instance, "__monk_validate__")
-        if inspect.iscoroutinefunction(hook) or inspect.isasyncgenfunction(hook):
-            raise TypeError(
-                "iron-monk is strictly synchronous. Async __monk_validate__ hooks are not supported. Stateful validation (like DB lookups) should occur in your service layer after syntax validation."
-            )
+    if not errors:
+        hook = getattr(instance, "__monk_validate__", None)
+        if hook is not None:
+            if inspect.iscoroutinefunction(hook) or inspect.isasyncgenfunction(hook):
+                raise TypeError("iron-monk is strictly synchronous. Async __monk_validate__ hooks are not supported.")
 
-        result = hook()
-        _process_monk_validate_result(result, errors)
+            result = hook()
+            _process_monk_validate_result(result, errors)
 
     if errors:
         raise ValidationError(errors)

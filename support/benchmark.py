@@ -243,17 +243,18 @@ data = {
 run_monk_nested = "validate_dict(data, UserDict)"
 
 setup_pydantic_nested = """
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import Field, TypeAdapter
+from typing import TypedDict, Annotated
 
-class Address(BaseModel):
-    city: str = Field(min_length=2)
+class AddressDict(TypedDict):
+    city: Annotated[str, Field(min_length=2)]
 
-class User(BaseModel):
+class UserDict(TypedDict):
     id: int
-    address: Address
-    history: list[Address]
+    address: AddressDict
+    history: list[AddressDict]
 
-adapter = TypeAdapter(User)
+adapter = TypeAdapter(UserDict)
 data = {
     "id": 1,
     "address": {"city": "New York"},
@@ -264,15 +265,15 @@ run_pydantic_nested = "adapter.validate_python(data)"
 
 setup_msgspec_nested = """
 import msgspec
-from typing import Annotated
+from typing import Annotated, TypedDict
 
-class Address(msgspec.Struct):
+class AddressDict(TypedDict):
     city: Annotated[str, msgspec.Meta(min_length=2)]
 
-class User(msgspec.Struct):
+class UserDict(TypedDict):
     id: int
-    address: Address
-    history: list[Address]
+    address: AddressDict
+    history: list[AddressDict]
 
 data = {
     "id": 1,
@@ -280,7 +281,7 @@ data = {
     "history": [{"city": "London"}, {"city": "Paris"}]
 }
 """
-run_msgspec_nested = "msgspec.convert(data, User)"
+run_msgspec_nested = "msgspec.convert(data, UserDict)"
 
 setup_marshmallow_nested = """
 from marshmallow import Schema, fields, validate

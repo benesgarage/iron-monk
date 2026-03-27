@@ -490,3 +490,171 @@ def test_async_validate_rejection() -> None:
 
     with pytest.raises(TypeError, match="iron-monk is strictly synchronous"):
         validate(AsyncUser(username="admin"))
+
+
+def test_ignored_metadata_in_annotated() -> None:
+    @monk
+    class MetadataModel:
+        # "just some string" is not a MonkConstraint, so it should be safely ignored
+        value: Annotated[str, "just some string metadata"]
+
+    # Should not crash and should resolve values perfectly
+    assert validate(MetadataModel(value="test")).value == "test"
+
+
+def test_validate_stream_item_failures() -> None:
+    from monk.operations import validate_stream
+    from monk.constraints import LowerCase, Nullable
+
+    # 1. Test None value rejection
+    gen = validate_stream(["a", None], LowerCase)
+    assert next(gen) == "a"
+    with pytest.raises(ValidationError) as exc:
+        next(gen)
+    assert exc.value.errors[0]["code"] == "NotNull"
+    assert exc.value.errors[0]["field"] == "[1]"
+
+    # 2. Test actual validation failure
+    gen2 = validate_stream(["a", "B"], LowerCase)
+    assert next(gen2) == "a"
+    with pytest.raises(ValidationError) as exc2:
+        next(gen2)
+    assert exc2.value.errors[0]["code"] == "Predicate"
+    assert exc2.value.errors[0]["field"] == "[1]"
+
+    # 3. Test Nullable marker allowing None in stream
+    gen3 = validate_stream(["a", None], Nullable, LowerCase)
+    assert next(gen3) == "a"
+    assert next(gen3) is None
+
+
+def test_validate_stream_missing_constraint_args() -> None:
+    from monk.operations import validate_stream
+    from monk.constraints import MultipleOf
+
+    # Len requires arguments, so passing the uninstantiated class should raise a TypeError
+    with pytest.raises(TypeError, match="missing required arguments"):
+        gen = validate_stream([6], MultipleOf)
+        next(gen)  # The generator must be advanced to trigger preparation
+
+
+def test_recurse_on_set() -> None:
+    """Covers the set/frozenset branch in the _recurse helper."""
+
+    @monk(frozen=True)  # Must be frozen to be hashable
+    class Inner:
+        val: Annotated[int, Interval(ge=10)]
+
+        # Bypass dataclass tuple-hashing so we can safely add unvalidated objects to a set
+        def __hash__(self) -> int:
+            return id(self)
+
+        def __eq__(self, other: Any) -> bool:
+            return self is other
+
+    @monk
+    class Outer:
+        items: set[Inner]
+
+    # Success path (covers the recursion branch)
+    validate(Outer(items={Inner(val=10), Inner(val=11)}))
+
+    # Failure
+    with pytest.raises(ValidationError) as exc:
+        validate(Outer(items={Inner(val=10), Inner(val=9)}))
+
+    assert exc.value.errors[0]["code"] == "Interval"
+
+
+def test_function_validation_error_aggregation() -> None:
+    """Covers the `except ValidationError` block in `validate_arguments`."""
+    from monk.constraints import Each, LowerCase
+
+    @monk
+    def process_tags(tags: Annotated[list[str], Each(LowerCase)]) -> None:
+        pass
+
+    with pytest.raises(ValidationError) as exc:
+        process_tags(tags=["a", "B", "c", "D"])
+
+    errors = exc.value.errors
+    assert len(errors) == 2
+    assert errors[0]["field"] == "tags[1]"
+    assert errors[1]["field"] == "tags[3]"
+
+
+def test_return_validation_aggregation_and_recursion() -> None:
+    """Covers `except ValidationError` and `_recurse` in `validate_return`."""
+    from monk.constraints import Each, LowerCase, Len
+
+    @monk
+    class Inner:
+        val: Annotated[int, Interval(ge=10)]
+
+    # Test 1: Aggregation via `except ValidationError`
+    @monk
+    def get_tags() -> Annotated[list[str], Each(LowerCase)]:
+        return ["a", "B", "c", "D"]
+
+    with pytest.raises(ValidationError) as exc1:
+        get_tags()
+
+    errors1 = exc1.value.errors
+    assert len(errors1) == 2
+    assert errors1[0]["field"] == "return[1]"
+    assert errors1[1]["field"] == "return[3]"
+
+    # Test 2: Recursion on return value
+    @monk
+    def get_items() -> Annotated[list[Inner], Len(min_len=1)]:
+        return [Inner(val=10), Inner(val=9)]
+
+    with pytest.raises(ValidationError) as exc2:
+        get_items()
+
+    errors2 = exc2.value.errors
+    assert len(errors2) == 1
+    assert errors2[0]["field"] == "return[1].val"
+    assert errors2[0]["code"] == "Interval"
+
+
+def test_return_validation_none_rejection() -> None:
+    """Covers the `if value is None` block in `validate_return`."""
+    from monk.constraints import Nullable, Len
+
+    @monk
+    def get_name() -> Annotated[str, Len(min_len=2)]:
+        return None  # type: ignore
+
+    with pytest.raises(ValidationError) as exc:
+        get_name()
+
+    assert exc.value.errors[0]["code"] == "NotNull"
+    assert exc.value.errors[0]["field"] == "return"
+
+    @monk
+    def get_nullable_name() -> Annotated[str | None, Nullable, Len(min_len=2)]:
+        return None
+
+    assert get_nullable_name() is None
+
+
+def test_argument_validation_none_rejection() -> None:
+    """Covers the `if value is None` block in `validate_arguments`."""
+    from monk.constraints import Nullable, Len
+
+    @monk
+    def process_name(name: Annotated[str, Len(min_len=2)]) -> None:
+        pass
+
+    with pytest.raises(ValidationError) as exc:
+        process_name(name=None)  # type: ignore
+
+    assert exc.value.errors[0]["code"] == "NotNull"
+    assert exc.value.errors[0]["field"] == "name"
+
+    @monk
+    def process_nullable_name(name: Annotated[str | None, Nullable, Len(min_len=2)]) -> None:
+        pass
+
+    process_nullable_name(name=None)

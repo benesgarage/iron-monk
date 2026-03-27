@@ -157,7 +157,7 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
 
         # Overwrite __getattribute__ to guard the dataclass until validated
         def __getattribute__(self: Any, name: str) -> Any:
-            if name == "validate" or name.startswith("_"):
+            if name in ("validate", "__hash__") or name.startswith("_"):
                 return object.__getattribute__(self, name)
 
             if not object.__getattribute__(self, "__monk_safe__"):
@@ -182,7 +182,7 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
     def _wrap_function(func: Callable[P, R]) -> Callable[P, R]:
         hints = get_type_hints(func, include_extras=True)
         rules = _extract_monk_metadata(hints)
-        return_constraints = rules.pop("return", [])
+        return_constraints = rules.pop("return", None)
         sig = inspect.signature(func)
 
         if inspect.iscoroutinefunction(func):
@@ -193,7 +193,7 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
                 bound.apply_defaults()
                 validate_arguments(bound.arguments, rules)
                 result = await func(*args, **kwargs)
-                if return_constraints:
+                if return_constraints is not None:
                     validate_return(result, return_constraints)
                 return result
 
@@ -206,7 +206,7 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
                 bound.apply_defaults()
                 validate_arguments(bound.arguments, rules)
                 result = func(*args, **kwargs)
-                if return_constraints:
+                if return_constraints is not None:
                     validate_return(result, return_constraints)
                 return result
 

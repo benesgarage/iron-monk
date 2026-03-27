@@ -96,17 +96,17 @@ The Python ecosystem is dominated by heavy validation frameworks. `iron-monk` is
  
  *Tested on Python 3.13, executing 100,000 simple primitive validations.*
 
-| Metric                               | `iron-monk`<br>*(v0.18.0)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
-|--------------------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
-| **Package Size**                     | `0.04 MB`                  | `0.44 MB`                | `5.91 MB`                 | `0.21 MB`              | `0.17 MB`                    | `0.09 MB` |
-| **Cold Start**                       | `32.05ms`                  | `36.96ms`                | `61.59ms`                 | `38.78ms`              | `40.00ms`                    |
-| **Object Validation (100k)**         | `0.170s`                   | `0.012s`                 | `0.054s`                  | `0.083s`               | N/A                          |
-| **Dict Validation (100k)**           | `0.075s`                   | `0.055s`                 | `0.051s`                  | N/A                    | `0.410s`                     |
-| **Nested Dict Validation (100k)**    | `0.388s`                   | `0.028s`                 | `0.131s`                  | N/A                    | `1.379s`                     |
-| **Invalid Dict Validation (100k)**   | `0.234s`                   | `0.079s`                 | `0.077s`                  | N/A                    | `0.993s`                     |
-| **Sanitized Dict Validation (100k)** | `0.087s`                   | `0.058s`                 | `0.052s`                  | N/A                    | `0.412s`                     |
-| **Partial Dict Validation (100k)**   | `0.059s`                   | N/A                      | N/A                       | N/A                    | `0.276s`                     |
-| **Function Validation (100k)**       | `0.155s`                   | N/A                      | `0.055s`                  | N/A                    | N/A                          |
+| Metric                    | `iron-monk`<br>*(v0.18.2)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
+|---------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
+| **Package Size**          | `0.06 MB`                  | `0.44 MB`                | `5.91 MB`                 | `0.21 MB`              | `0.17 MB`                    |
+| **Cold Start**            | `44.77ms`                  | `52.62ms`                | `83.46ms`                 | `55.73ms`              | `56.01ms`                    |
+| **Object (100k)**         | `0.185s`                   | `0.014s`                 | `0.060s`                  | `0.089s`               | N/A                          |
+| **Dict (100k)**           | `0.067s`                   | `0.059s`                 | `0.057s`                  | N/A                    | `0.445s`                     |
+| **Nested Dict (100k)**    | `0.280s`                   | `0.075s`                 | `0.062s`                  | N/A                    | `1.513s`                     |
+| **Invalid Dict (100k)**   | `0.244s`                   | `0.091s`                 | `0.088s`                  | N/A                    | `1.117s`                     |
+| **Sanitized Dict (100k)** | `0.083s`                   | `0.070s`                 | `0.058s`                  | N/A                    | `0.450s`                     |
+| **Partial Dict (100k)**   | `0.056s`                   | N/A                      | N/A                       | N/A                    | `0.293s`                     |
+| **Function Call (100k)**  | `0.162s`                   | N/A                      | `0.065s`                  | N/A                    | N/A                          |
 
 **The Takeaway:** When evaluating features, execution speed, package size, and cold-start times together, `iron-monk` is holistically the best-in-class pure-Python validation framework.
 

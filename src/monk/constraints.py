@@ -4,11 +4,11 @@ import json
 import math
 import re
 import uuid
-import pathlib
 from collections.abc import Iterable, Sized, Iterator
 from dataclasses import field
 from typing import Any, Callable, Annotated, cast
 from urllib.parse import urlparse
+import pathlib
 
 from .protocols import MonkConstraint, SupportsGt, SupportsGe, SupportsLt, SupportsLe, SupportsMod
 from .decorators import constraint

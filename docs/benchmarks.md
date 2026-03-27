@@ -8,17 +8,17 @@ These benchmarks were run in an isolated virtual environment using **Python 3.13
 
 Validations were executed 100,000 times against simple, primitive constraints (e.g., string length and integer intervals) to ensure a fair measurement of framework overhead.
 
-| Metric                               | `iron-monk`<br>*(v0.18.0)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
-|--------------------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
-| **Package Size**                     | `0.04 MB`                  | `0.44 MB`                | `5.91 MB`                 | `0.21 MB`              | `0.17 MB`                    | `0.09 MB` |
-| **Cold Start**                       | `32.05ms`                  | `36.96ms`                | `61.59ms`                 | `38.78ms`              | `40.00ms`                    |
-| **Object Validation (100k)**         | `0.170s`                   | `0.012s`                 | `0.054s`                  | `0.083s`               | N/A                          |
-| **Dict Validation (100k)**           | `0.075s`                   | `0.055s`                 | `0.051s`                  | N/A                    | `0.410s`                     |
-| **Nested Dict Validation (100k)**    | `0.388s`                   | `0.028s`                 | `0.131s`                  | N/A                    | `1.379s`                     |
-| **Invalid Dict Validation (100k)**   | `0.234s`                   | `0.079s`                 | `0.077s`                  | N/A                    | `0.993s`                     |
-| **Sanitized Dict Validation (100k)** | `0.087s`                   | `0.058s`                 | `0.052s`                  | N/A                    | `0.412s`                     |
-| **Partial Dict Validation (100k)**   | `0.059s`                   | N/A                      | N/A                       | N/A                    | `0.276s`                     |
-| **Function Validation (100k)**       | `0.155s`                   | N/A                      | `0.055s`                  | N/A                    | N/A                          |
+| Metric                    | `iron-monk`<br>*(v0.18.2)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
+|---------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
+| **Package Size**          | `0.06 MB`                  | `0.44 MB`                | `5.91 MB`                 | `0.21 MB`              | `0.17 MB`                    |
+| **Cold Start**            | `44.77ms`                  | `52.62ms`                | `83.46ms`                 | `55.73ms`              | `56.01ms`                    |
+| **Object (100k)**         | `0.185s`                   | `0.014s`                 | `0.060s`                  | `0.089s`               | N/A                          |
+| **Dict (100k)**           | `0.067s`                   | `0.059s`                 | `0.057s`                  | N/A                    | `0.445s`                     |
+| **Nested Dict (100k)**    | `0.280s`                   | `0.075s`                 | `0.062s`                  | N/A                    | `1.513s`                     |
+| **Invalid Dict (100k)**   | `0.244s`                   | `0.091s`                 | `0.088s`                  | N/A                    | `1.117s`                     |
+| **Sanitized Dict (100k)** | `0.083s`                   | `0.070s`                 | `0.058s`                  | N/A                    | `0.450s`                     |
+| **Partial Dict (100k)**   | `0.056s`                   | N/A                      | N/A                       | N/A                    | `0.293s`                     |
+| **Function Call (100k)**  | `0.162s`                   | N/A                      | `0.065s`                  | N/A                    | N/A                          |
 
 ---
 
@@ -28,7 +28,7 @@ Validations were executed 100,000 times against simple, primitive constraints (e
 When evaluating features, speed, size, and cold starts together, `iron-monk` is the premier pure-Python validator. It is the *only* library on the board that handles standard objects, raw dicts, deep nesting, dynamic partial updates, automatic sanitization, and function interception natively. It does all of this while processing over **1.3 million dictionaries per second**.
 
 ### 2. Microscopic Footprint & Serverless Ready
-With **zero** dependencies, `iron-monk` is just 40 KB. It is the fastest library to import, functionally eliminating framework-induced cold starts in Serverless environments like AWS Lambda.
+With **zero** dependencies, `iron-monk` is just 60 KB. It is the fastest library to import, functionally eliminating framework-induced cold starts in Serverless environments like AWS Lambda.
 
 ### 3. Why `attrs` is faster at Object Instantiation
 `attrs` relies on Code Generation, dynamically compiling custom Python strings into memory via `eval()`. `iron-monk` strictly avoids `eval()`, accepting a microsecond of runtime overhead to keep the codebase clean while aggregating errors.
