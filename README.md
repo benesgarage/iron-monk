@@ -126,7 +126,12 @@ Understand the validation lifecycle, how to cleanly extract error dictionaries, 
 👉 [**Read the Core Concepts Guide &rarr;**](https://benesgarage.github.io/iron-monk/core_concepts/)
 
 ## The Toolkit
-**Batteries included**. `iron-monk` comes with a comprehensive suite of built-in constraints. From networking (`Email`, `Port`, `MacAddress`) and formats (`HexColor`, `JSON`, `SemVer`) to collections (`Subset`, `ContainsKeys`) and logic (`Not`, `Predicate`), you will rarely need to write your own rules.
+**Batteries included**. `iron-monk` comes with a comprehensive suite of built-in constraints. Because we refuse to coerce data, we natively support validations that heavy frameworks struggle with:
+- 📝 **`CSV`**: Deeply validate comma-separated strings in-place without allocating lists in memory.
+- ☁️ **`Cron`**: Structurally validate standard POSIX and strict AWS EventBridge scheduling strings.
+- 🔒 **`JWT`**: Verify JSON Web Tokens structurally before passing them to heavy cryptography libraries.
+- 📜 **`JSON`**: Ensure a string contains valid, parsable JSON without mutating it into a dictionary.
+- 🔀 **`Not`**: Seamlessly invert the logic of any constraint (e.g., `Not(URL)`).
 
 👉 [**Check out the Constraint Toolkit &rarr;**](https://benesgarage.github.io/iron-monk/constraints/)
 
