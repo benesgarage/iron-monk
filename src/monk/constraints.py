@@ -917,6 +917,43 @@ class CSV:
 
 
 @constraint(kw_only=True)
+class Cron:
+    """Validates a cron expression structurally (supports standard 5-field and AWS 6-field formats)."""
+
+    allow_aws: bool = False
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a cron expression.")
+
+        # Handle standard macros like @daily
+        if not self.allow_aws and value.startswith("@"):
+            if value not in ("@yearly", "@annually", "@monthly", "@weekly", "@daily", "@midnight", "@hourly"):
+                raise ValueError("Invalid cron macro.")
+            return
+
+        parts = value.split()
+        expected_len = 6 if self.allow_aws else 5
+
+        if len(parts) != expected_len:
+            format_name = "AWS (6-field)" if self.allow_aws else "Standard (5-field)"
+            raise ValueError(f"Must be a valid {format_name} cron expression.")
+
+        # A fast structural regex for a single cron field (handles numbers, ranges, steps, and AWS specific chars)
+        field_regex = re.compile(r"^[\*0-9,\-/\?LWA-Za-z#]+$")
+        for part in parts:
+            if not field_regex.match(part):
+                raise ValueError("Contains invalid cron characters.")
+
+        if self.allow_aws:
+            # AWS requires exactly one '?' in either Day-of-month (index 2) or Day-of-week (index 4)
+            if (parts[2] == "?") == (parts[4] == "?"):
+                raise ValueError("AWS cron requires exactly one '?' in either the Day-of-month or Day-of-week field.")
+
+
+@constraint(kw_only=True)
 class DictOf:
     """Validates arbitrary dictionaries by applying constraints to their keys and/or values."""
 

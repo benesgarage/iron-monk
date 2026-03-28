@@ -10,6 +10,7 @@ from monk.constraints import (
     MacAddress,
     Interval,
     IsISO8601,
+    Cron,
     CSV,
     LowerCase,
     Len,
@@ -168,6 +169,39 @@ def test_is_iso8601_constraint() -> None:
 
     with pytest.raises(TypeError):
         constraint.validate(datetime.datetime.now())
+
+
+def test_cron_constraint() -> None:
+    standard = Cron()
+    aws = Cron(allow_aws=True)
+
+    # Standard Success
+    standard.validate("* * * * *")
+    standard.validate("0 12 * * 1-5")
+    standard.validate("@daily")
+
+    # Standard Failure
+    with pytest.raises(ValueError, match="5-field"):
+        standard.validate("* * * * * *")  # 6 fields
+    with pytest.raises(ValueError, match="invalid cron characters"):
+        standard.validate("0 12 & * *")
+    with pytest.raises(ValueError, match="Invalid cron macro"):
+        standard.validate("@bi-yearly")
+
+    # AWS Success
+    aws.validate("0 12 * * ? *")
+    aws.validate("15 10 ? * 6L 2022-2023")
+
+    # AWS Failure
+    with pytest.raises(ValueError, match="6-field"):
+        aws.validate("* * * * ?")  # 5 fields
+    with pytest.raises(ValueError, match="exactly one '\\?'"):
+        aws.validate("0 12 * * * *")  # Missing ?
+    with pytest.raises(ValueError, match="exactly one '\\?'"):
+        aws.validate("0 12 ? * ? *")  # Two ?
+
+    with pytest.raises(TypeError):
+        standard.validate(123)
 
 
 def test_csv_constraint() -> None:
