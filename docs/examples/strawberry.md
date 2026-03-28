@@ -10,10 +10,13 @@ Because `iron-monk` defers validation, Strawberry can safely instantiate input o
 
 ### Step 1: Define your Types
 ```python
+from typing import Annotated, Self
+
 import strawberry
-from typing import Annotated
+from strawberry.utils.str_converters import to_camel_case
 from monk import monk
 from monk.constraints import Email, Len
+from monk.exceptions import ValidationError
 
 # 1. The Input (Decorated with @monk)
 @strawberry.input
@@ -36,11 +39,22 @@ class FieldError:
 class BadRequest:
     message: str
     errors: list[FieldError]
+
+    @classmethod
+    def from_exc(cls, e: ValidationError) -> Self:
+        return cls(
+            message="Input validation failed.",
+            errors=[
+                FieldError(field=to_camel_case(err["field"]), message=err["message"])
+                for err in e.errors
+            ]
+        )
 ```
 
 ### Step 2: The Resolver
 
 ```python
+import strawberry
 from strawberry.utils.str_converters import to_camel_case
 from monk import validate
 from monk.exceptions import ValidationError
@@ -53,13 +67,7 @@ class Mutation:
         try:
             valid_input = validate(input)
         except ValidationError as e:
-            return BadRequest(
-                message="Input validation failed.",
-                errors=[
-                    FieldError(field=to_camel_case(err["field"]), message=err["message"])
-                    for err in e.errors
-                ],
-            )
+            return BadRequest.from_exc(e)
 
         return RegisterSuccess(email=valid_input.email)
 ```
