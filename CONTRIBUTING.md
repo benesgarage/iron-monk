@@ -1,29 +1,16 @@
 # Contributing to iron-monk
 
-First off, thank you for considering contributing to `iron-monk`!
+First off, thank you for your interest in `iron-monk`!
 
-## Development Setup
+## Current Status: Closed to Pull Requests
 
-We use a `Makefile` to make local development incredibly simple.
+At this stage of the project, **I am not currently accepting external Pull Requests (PRs).**
 
-1. **Fork and clone** the repository.
-2. **Install dependencies** in a virtual environment:
-   ```bash
-   make install
-   ```
+`iron-monk` has a very strict architectural philosophy ("Zero Coercion", zero dependencies, strict typing) and is currently undergoing rapid iteration. To maintain development velocity and architectural purity, I am keeping the codebase strictly solo-maintained for the time being.
 
-## Making Changes
+## How You Can Still Help
 
-`iron-monk` is heavily focused on strict typing, zero-dependency performance, and testing. If you are adding a new constraint, please ensure it includes:
-- Success tests
-- Failure tests (`ValueError`)
-- Type mismatch tests (`TypeError`)
-
-## Before Submitting a Pull Request
-
-Before you push your changes, please run our universal check command. This will format your code with Ruff, lint it, check the static typing with MyPy, and run the pytest suite:
-
-```bash
-make check
-```
-If this passes, your PR is ready to go!
+I am highly active on the issue tracker and would absolutely love your feedback! You can still heavily contribute to the project by:
+1. **Reporting Bugs:** If you find a bug, please open an issue with a reproducible code snippet.
+2. **Suggesting Features:** If you have an idea for a new constraint or feature, open an issue! We can discuss whether it fits the "Zero Magic" philosophy of the toolkit.
+3. **Sharing Use Cases:** Let me know how you are using `iron-monk` in your projects!
