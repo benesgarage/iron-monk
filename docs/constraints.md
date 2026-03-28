@@ -114,7 +114,7 @@ import uuid
 from typing import Annotated
 
 from monk import monk
-from monk.constraints import Email, URL, IPAddress, UUID, Slug, SemVer, Base64, HexColor, MacAddress, JSON, Port, LatLong
+from monk.constraints import Email, URL, IPAddress, UUID, JWT, Slug, SemVer, Base64, HexColor, MacAddress, JSON, Port, LatLong
 
 @monk
 class NetworkConstraints:
@@ -129,6 +129,9 @@ class NetworkConstraints:
     
     # Validates UUID strings or native UUID objects
     node_id: Annotated[str | uuid.UUID, UUID]
+    
+    # Validates a JSON Web Token (JWT) structurally
+    access_token: Annotated[str, JWT]
     
     # URL-safe slugs
     blog_slug: Annotated[str, Slug]

@@ -9,6 +9,7 @@ from monk.constraints import (
     Port,
     MacAddress,
     Interval,
+    JWT,
     IsISO8601,
     Cron,
     CSV,
@@ -202,6 +203,27 @@ def test_cron_constraint() -> None:
 
     with pytest.raises(TypeError):
         standard.validate(123)
+
+
+def test_jwt_constraint() -> None:
+    constraint = JWT()
+
+    # Success
+    constraint.validate(
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+    )
+    constraint.validate("eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIn0.")  # Empty signature
+
+    # Failure
+    with pytest.raises(ValueError):
+        constraint.validate("not-a-jwt")
+    with pytest.raises(ValueError):
+        constraint.validate("header.payload.sig.extra")  # Too many dots
+    with pytest.raises(ValueError):
+        constraint.validate("header.payload+invalid_chars")  # Invalid Base64Url chars
+
+    with pytest.raises(TypeError):
+        constraint.validate(123)
 
 
 def test_csv_constraint() -> None:

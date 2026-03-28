@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.3]
+
+### Added
+- **Dynamic Dictionaries:** Added the `DictOf` constraint to validate arbitrary dictionaries with dynamic keys.
+- **Cloud Scheduling:** Added the `Cron` constraint to structurally validate standard 5-field POSIX cron expressions and 6-field AWS EventBridge formats.
+- **Modern Auth:** Added the `JWT` constraint to structurally validate JSON Web Tokens without pulling in heavy cryptography dependencies.
+- **ISO 8601 Dates:** Added the `IsISO8601` constraint to validate that a string is a properly formatted ISO 8601 date or datetime.
+
 ## [0.18.2]
 
 ### Changed

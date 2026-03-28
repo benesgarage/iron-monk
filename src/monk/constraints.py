@@ -533,6 +533,22 @@ class UUID:
 
 
 @constraint
+class JWT:
+    """Validates a JSON Web Token (JWT) structurally (Header.Payload.Signature)."""
+
+    _regex = re.compile(r"^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*\Z")
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        try:
+            if not self._regex.match(value):
+                raise ValueError("Must be a valid JSON Web Token (JWT).")
+        except TypeError:
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a JWT.")
+
+
+@constraint
 class URL:
     """Validates that a string is a properly formatted URL"""
 
