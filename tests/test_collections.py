@@ -4,7 +4,19 @@ from typing import Annotated, Iterator
 
 from monk import monk, validate
 from monk.exceptions import ValidationError
-from monk.constraints import Each, Len, LowerCase, Email, Unique, Contains, OneOf, MultipleOf, Nullable, NotNull
+from monk.constraints import (
+    Each,
+    Len,
+    LowerCase,
+    Email,
+    Unique,
+    Contains,
+    OneOf,
+    MultipleOf,
+    Nullable,
+    NotNull,
+    UpperCase,
+)
 
 
 # --- Raw Constraint Tests ---
@@ -294,3 +306,53 @@ def test_exact_len_constraint() -> None:
         ExactLen(5).validate("1234")
     with pytest.raises(TypeError):
         ExactLen(5).validate(123)
+
+
+def test_dictof_constraint() -> None:
+    from monk.constraints import DictOf, LowerCase, URL, Len, Each
+
+    constraint = DictOf(key=LowerCase, value=URL)
+
+    # 1. Success
+    constraint.validate({"tag": "https://example.com"})
+    constraint.validate({})  # Empty dict passes gracefully
+
+    # 2. Key failure (uses the <key: ...> format)
+    with pytest.raises(ValidationError) as exc:
+        constraint.validate({"TAG": "https://example.com"})
+    assert exc.value.errors[0]["field"] == "<key: 'TAG'>"
+    assert exc.value.errors[0]["code"] == "Predicate"
+
+    # 3. Value failure
+    with pytest.raises(ValidationError) as exc2:
+        constraint.validate({"tag": "not-a-url"})
+    assert exc2.value.errors[0]["field"] == "['tag']"
+    assert exc2.value.errors[0]["code"] == "URL"
+
+    # 4. Iterable of constraints for Keys and Values
+    complex_constraint = DictOf(key=[LowerCase, Len(min_len=3)], value=Len(max_len=10))
+    with pytest.raises(ValidationError) as exc3:
+        complex_constraint.validate({"ta": "this is way too long"})
+    assert len(exc3.value.errors) == 2
+    assert exc3.value.errors[0]["field"] == "<key: 'ta'>"  # Failed min_len on key
+    assert exc3.value.errors[1]["field"] == "['ta']"  # Failed max_len on value
+
+    # 5. Inner ValidationError aggregation
+    nested_constraint = DictOf(value=Each(LowerCase))
+    with pytest.raises(ValidationError) as exc4:
+        nested_constraint.validate({"tags": ["a", "B"]})
+    assert exc4.value.errors[0]["field"] == "['tags'][1]"
+
+    # 6. Key raises a ValidationError internally
+    nested_constraint = DictOf(key=Each(UpperCase))
+    with pytest.raises(ValidationError) as exc5:
+        nested_constraint.validate({("tags", "labels"): ["a", "B"]})
+    assert len(exc5.value.errors) == 2
+    assert exc5.value.errors[0]["field"] == "<key: ('tags', 'labels')>[0]"
+    assert exc5.value.errors[1]["field"] == "<key: ('tags', 'labels')>[1]"
+
+    # 6. Edge cases
+    with pytest.raises(TypeError):
+        constraint.validate(123)
+    with pytest.raises(TypeError, match="missing required arguments"):
+        DictOf(key=MultipleOf)

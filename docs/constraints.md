@@ -65,7 +65,7 @@ class NumericConstraints:
 from typing import Annotated, TypedDict
 
 from monk import monk
-from monk.constraints import Each, LowerCase, Len, ExactLen, OneOf, Unique, Contains, Nested, ContainsKeys, Subset, CSV
+from monk.constraints import Each, LowerCase, Len, ExactLen, OneOf, Unique, Contains, Nested, ContainsKeys, Subset, CSV, DictOf, URL
 
 class AddressDict(TypedDict):
     city: str
@@ -96,6 +96,9 @@ class CollectionConstraints:
     
     # CSV constraints can even be nested to validate complex matrix strings (e.g., "admin|write, viewer|read")
     role_matrix: Annotated[str, CSV(CSV(LowerCase, separator="|"), separator=",")]
+    
+    # Validates arbitrary/dynamic dictionaries by enforcing rules on keys and values
+    metadata: Annotated[dict, DictOf(key=LowerCase, value=URL)]
     
     # Ensure specific keys exist in an arbitrary dictionary
     payload: Annotated[dict, ContainsKeys(["id", "type"])]

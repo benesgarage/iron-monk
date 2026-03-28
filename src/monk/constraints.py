@@ -914,3 +914,70 @@ class CSV:
 
         if errors:
             raise ValidationError(errors)
+
+
+@constraint(kw_only=True)
+class DictOf:
+    """Validates arbitrary dictionaries by applying constraints to their keys and/or values."""
+
+    key: Any = None
+    value: Any = None
+    message: str | None = None
+    code: str | None = None
+
+    _key_constraints: tuple[MonkConstraint, ...] = field(init=False, repr=False, compare=False)
+    _value_constraints: tuple[MonkConstraint, ...] = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        def _prep(c_input: Any) -> tuple[MonkConstraint, ...]:
+            if c_input is None:
+                return ()
+            c_list = c_input if isinstance(c_input, Iterable) and not isinstance(c_input, (str, bytes)) else [c_input]
+            prepared: list[MonkConstraint] = []
+            for c in c_list:
+                if isinstance(c, type) and issubclass(c, MonkConstraint):
+                    try:
+                        prepared.append(c())
+                    except TypeError as e:
+                        raise TypeError(
+                            f"Constraint '{c.__name__}' missing required arguments. Did you mean {c.__name__}(...)?"
+                        ) from e
+                else:
+                    prepared.append(cast(MonkConstraint, c))
+            return tuple(prepared)
+
+        object.__setattr__(self, "_key_constraints", _prep(self.key))
+        object.__setattr__(self, "_value_constraints", _prep(self.value))
+
+    def validate(self, data: Any) -> None:
+        if not isinstance(data, dict):
+            raise TypeError(f"Type '{type(data).__name__}' is not a dictionary.")
+
+        errors: list[ErrorDict] = []
+        for k, v in data.items():
+            if self._key_constraints:
+                for c in self._key_constraints:
+                    try:
+                        c.validate(k)
+                    except ValidationError as e:
+                        for err in e.errors:
+                            err["field"] = f"<key: {repr(k)}>{err.get('field', '')}"
+                            errors.append(err)
+                    except (ValueError, TypeError) as e:
+                        error_code = getattr(c, "code", None) or type(c).__name__
+                        errors.append({"field": f"<key: {repr(k)}>", "message": str(e), "code": error_code})
+
+            if self._value_constraints:
+                for c in self._value_constraints:
+                    try:
+                        c.validate(v)
+                    except ValidationError as e:
+                        for err in e.errors:
+                            err["field"] = f"[{repr(k)}]{err.get('field', '')}"
+                            errors.append(err)
+                    except (ValueError, TypeError) as e:
+                        error_code = getattr(c, "code", None) or type(c).__name__
+                        errors.append({"field": f"[{repr(k)}]", "message": str(e), "code": error_code})
+
+        if errors:
+            raise ValidationError(errors)
