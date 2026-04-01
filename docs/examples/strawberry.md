@@ -250,3 +250,34 @@ class Query:
         db_results = ["apple", "banana", "cherry", "date"]
         return db_results[offset : offset + limit]
 ```
+
+## 6. Safely Unwrapping Strawberry's Maybe
+
+When building `PATCH` mutations, Strawberry wraps provided values in a `Some` object. Teach `iron-monk` how to globally extract the inner value for validation without mutating the original wrapper.
+
+```python
+import strawberry
+from strawberry.types import Some
+from typing import Annotated
+from monk import monk, validate, settings
+from monk.constraints import Email
+
+# 1. Teach iron-monk how to extract the value
+settings.unwrappers = {Some: lambda x: x.value}
+
+@strawberry.input
+@monk
+class UpdateUserInput:
+    email: strawberry.Maybe[Annotated[str, Email]]
+
+@strawberry.type
+class Mutation:
+    @strawberry.mutation
+    def patch_user(self, input: UpdateUserInput) -> str:
+        valid = validate(input)
+        
+        if valid.email is None:
+            return "Email omitted."
+        
+        return f"Updated email: {valid.email.value}"
+```

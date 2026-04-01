@@ -45,6 +45,7 @@ nav:
       - Cross-Field Validation: advanced/cross_field.md
       - Logical Composability: advanced/logical.md
       - Custom Constraints & Errors: advanced/customization.md
+      - Framework Integration: advanced/framework_integration.md
   - Real-World Examples:
       - Overview: examples.md
       - Web & API:

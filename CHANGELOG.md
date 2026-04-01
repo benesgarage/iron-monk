@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0]
+
+### Added
+- **Framework Unwrappers:** Added `settings.unwrappers` to teach `iron-monk` how to extract values from wrapper objects (like Strawberry's `Maybe`/`Some`).
+- **Ignored Sentinels:** Added `settings.ignored_sentinels` to skip validation for omitted-field markers (like `UNSET`).
+
 ## [0.18.3]
 
 ### Added

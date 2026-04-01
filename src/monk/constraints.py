@@ -347,6 +347,7 @@ class Each:
 
         errors: list[ErrorDict] = []
         for i, item in enumerate(value):
+            item = settings.unwrap(item)
             if item is None:
                 if self.allow_none:
                     continue
@@ -1008,6 +1009,8 @@ class DictOf:
 
         errors: list[ErrorDict] = []
         for k, v in data.items():
+            k = settings.unwrap(k)
+            v = settings.unwrap(v)
             if self._key_constraints:
                 for c in self._key_constraints:
                     try:

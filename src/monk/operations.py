@@ -63,7 +63,10 @@ def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, tuple[list[MonkCo
             args = get_args(hint)
             origin = get_origin(hint)
             if args and origin not in (list, set, frozenset, tuple, dict):
-                metadata = getattr(args[0], "__metadata__", [])
+                for arg in args:
+                    metadata = getattr(arg, "__metadata__", [])
+                    if metadata:
+                        break
 
         if metadata:
             compiled_rules = _prepare_constraints(metadata)
@@ -76,6 +79,7 @@ def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, tuple[list[MonkCo
 
 def _recurse(val: Any, prefix: str, errors: list[ErrorDict]) -> None:
     """Recursively validates nested Monk objects and bubbles up errors."""
+    val = settings.unwrap(val)
     # getattr(..., None) is faster than hasattr + getattr
     if getattr(val, "__monk_rules__", None) is not None:
         try:
@@ -108,6 +112,7 @@ def validate_arguments(
     """Validates a dictionary of function arguments against extracted constraints."""
     errors: list[ErrorDict] = []
     for arg_name, value in arguments.items():
+        value = settings.unwrap(value)
         rule_tuple = rules.get(arg_name)
         if rule_tuple:
             constraints, is_nullable, is_not_null, not_null_c = rule_tuple
@@ -117,6 +122,9 @@ def validate_arguments(
                     msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
                     code = getattr(not_null_c, "code", None) or "NotNull"
                     errors.append({"field": arg_name, "message": msg, "code": code})
+                continue
+
+            if settings.ignored_sentinels and value in settings.ignored_sentinels:
                 continue
 
             for c in constraints:
@@ -142,6 +150,7 @@ def validate_arguments(
 def validate_return(value: Any, rule_tuple: tuple[list[MonkConstraint], bool, bool, Any]) -> None:
     """Validates a function's return value against extracted constraints."""
     errors: list[ErrorDict] = []
+    value = settings.unwrap(value)
     constraints, is_nullable, is_not_null, not_null_c = rule_tuple
 
     if value is None:
@@ -149,6 +158,8 @@ def validate_return(value: Any, rule_tuple: tuple[list[MonkConstraint], bool, bo
             msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
             code = getattr(not_null_c, "code", None) or "NotNull"
             errors.append({"field": "return", "message": msg, "code": code})
+    elif settings.ignored_sentinels and value in settings.ignored_sentinels:
+        pass
     else:
         for c in constraints:
             try:
@@ -211,7 +222,7 @@ def validate_dict(
         if partial and field_name not in data:
             continue
 
-        value = data.get(field_name)
+        value = settings.unwrap(data.get(field_name))
         constraints, is_nullable, is_not_null, not_null_c = rule_tuple
 
         if value is None:
@@ -219,6 +230,9 @@ def validate_dict(
                 msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
                 code = getattr(not_null_c, "code", None) or "NotNull"
                 errors.append({"field": field_name, "message": msg, "code": code})
+            continue
+
+        if settings.ignored_sentinels and value in settings.ignored_sentinels:
             continue
 
         for c in constraints:
@@ -261,10 +275,14 @@ def _prepare_stream_constraints(constraints: Iterable[Any]) -> list[MonkConstrai
 
 def _validate_stream_item(item: Any, constraints: list[MonkConstraint], errors: list[ErrorDict]) -> None:
     """A simplified validation loop specifically for stream items."""
+    item = settings.unwrap(item)
     if item is None:
         # Stream items are always considered required unless Nullable is present
         if not any(type(c).__name__ == "Nullable" for c in constraints):
             errors.append({"field": "", "message": "Stream items cannot be null.", "code": "NotNull"})
+        return
+
+    if settings.ignored_sentinels and item in settings.ignored_sentinels:
         return
 
     for c in constraints:
@@ -389,7 +407,7 @@ def validate(instance: T) -> T:
     fields = object.__getattribute__(instance, "__monk_fields__")
 
     for field_name in fields:
-        value = object.__getattribute__(instance, field_name)
+        value = settings.unwrap(object.__getattribute__(instance, field_name))
         rule_tuple = rules.get(field_name)
 
         if rule_tuple:
@@ -400,6 +418,9 @@ def validate(instance: T) -> T:
                     msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
                     code = getattr(not_null_c, "code", None) or "NotNull"
                     errors.append({"field": field_name, "message": msg, "code": code})
+                continue
+
+            if settings.ignored_sentinels and value in settings.ignored_sentinels:
                 continue
 
             for c in constraints:

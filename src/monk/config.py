@@ -1,4 +1,5 @@
 import os
+from typing import Any, Callable
 
 
 class MonkSettings:
@@ -6,6 +7,16 @@ class MonkSettings:
 
     defer: bool = True
     default_allow_none: bool = False
+    ignored_sentinels: tuple[Any, ...] = ()
+    unwrappers: dict[Any, Callable[[Any], Any]] = {}
+
+    def unwrap(self, val: Any) -> Any:
+        if not self.unwrappers:
+            return val
+        unwrapper = self.unwrappers.get(type(val))
+        if unwrapper is not None:
+            return unwrapper(val)
+        return val
 
 
 settings = MonkSettings()

@@ -658,3 +658,83 @@ def test_argument_validation_none_rejection() -> None:
         pass
 
     process_nullable_name(name=None)
+
+
+def test_ignored_sentinels() -> None:
+    """Covers global sentinel skipping for PATCH requests/GraphQL APIs."""
+
+    class UnsetType:
+        pass
+
+    # Sentinels in libraries like Strawberry are singleton instances!
+    UNSET = UnsetType()
+
+    settings.ignored_sentinels = (UNSET,)
+
+    @monk
+    class PatchModel:
+        # Resolves as Union[UnsetType, Annotated[str, Email]]
+        email: UnsetType | Annotated[str, Email] = UNSET
+
+    # Should completely bypass NotNull and Email checks because the value is the sentinel
+    validate(PatchModel())
+
+    from monk.operations import validate_dict, validate_stream
+    from typing import TypedDict
+
+    # 1. Cover validate_arguments
+    @monk
+    def process_email(email: UnsetType | Annotated[str, Email] = UNSET) -> None:
+        pass
+
+    process_email(email=UNSET)
+
+    # 2. Cover validate_return
+    @monk
+    def get_email() -> UnsetType | Annotated[str, Email]:
+        return UNSET
+
+    get_email()
+
+    # 3. Cover validate_dict
+    class PatchDict(TypedDict):
+        email: UnsetType | Annotated[str, Email]
+
+    validate_dict({"email": UNSET}, PatchDict)
+
+    # 4. Cover validate_stream
+    gen = validate_stream([UNSET], Email)
+    assert next(gen) is UNSET
+
+    settings.ignored_sentinels = ()  # Cleanup
+
+
+def test_value_unwrappers() -> None:
+    """Covers global wrapper unpacking for framework wrappers like Strawberry's Some."""
+
+    T_Some = TypeVar("T_Some")
+
+    class Some(Generic[T_Some]):
+        def __init__(self, value: T_Some):
+            self.value = value
+
+    settings.unwrappers = {Some: lambda x: x.value}
+
+    # Cover the case where unwrappers is populated, but the value's type is not registered
+    assert settings.unwrap("unregistered_string") == "unregistered_string"
+
+    @monk
+    class WrapperModel:
+        email: Some[Annotated[str, Email]]
+
+    # Valid inner value (remains wrapped securely after validation!)
+    model = validate(WrapperModel(email=Some("test@domain.com")))
+    assert isinstance(model.email, Some)
+    assert model.email.value == "test@domain.com"
+
+    # Invalid inner value
+    with pytest.raises(ValidationError) as exc:
+        validate(WrapperModel(email=Some("bad")))
+    assert exc.value.errors[0]["code"] == "Email"
+
+    settings.unwrappers = {}  # Cleanup
