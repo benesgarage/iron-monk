@@ -176,3 +176,44 @@ def test_strawberry_value_unwrappers() -> None:
     assert "Validation failed" in str(res2.errors[0].original_error)
 
     settings.unwrappers = {}  # Cleanup
+
+
+def test_strawberry_one_of_input() -> None:
+    import strawberry
+    from strawberry.types.maybe import Some
+    from typing import Any
+    from monk import settings
+
+    settings.unwrappers = {Some: lambda x: x.value}
+
+    # Simulate a user's custom stacked decorator where Strawberry builds the dataclass first
+    def monk_input(**kwargs: Any) -> Any:
+        def wrapper(c: type) -> type:
+            return monk(strawberry.input(**kwargs)(c))
+
+        return wrapper
+
+    @monk_input(one_of=True)
+    class DCROneOfEntityInput:
+        hcp: strawberry.Maybe[str]
+        hco: strawberry.Maybe[str]
+
+    @strawberry.type
+    class Query:
+        @strawberry.field
+        def check_one_of(self, input: DCROneOfEntityInput) -> str:
+            validate(input)
+            return "Valid OneOf!"
+
+    schema = strawberry.Schema(query=Query)
+
+    # 1. Provide exactly one (Strawberry validation passes, Monk validation passes)
+    res1 = schema.execute_sync('query { checkOneOf(input: {hcp: "value"}) }')
+    assert res1.errors is None
+
+    # 2. Provide multiple (Strawberry's __post_init__ catches it)
+    res2 = schema.execute_sync('query { checkOneOf(input: {hcp: "value", hco: "value2"}) }')
+    assert res2.errors is not None
+    assert "exactly one" in str(res2.errors[0].message)
+
+    settings.ignored_sentinels = ()  # Cleanup

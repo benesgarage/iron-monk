@@ -124,6 +124,10 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
         orig_post_init = getattr(original_cls, "__post_init__", None)
 
         def __post_init__(self: Any, *args: Any, **kwargs: Any) -> None:
+            # Temporarily uncloak the instance so 3rd-party __post_init__ hooks
+            # (like Strawberry's one_of validation) can safely read fields.
+            object.__setattr__(self, "__monk_safe__", True)
+
             if orig_post_init is not None:
                 orig_post_init(self, *args, **kwargs)
 
@@ -131,6 +135,9 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
             should_defer = defer if defer is not None else settings.defer
             if not should_defer:
                 validate(self)
+            else:
+                # Re-cloak it for deferred validation
+                object.__setattr__(self, "__monk_safe__", False)
 
         setattr(original_cls, "__post_init__", __post_init__)
 
