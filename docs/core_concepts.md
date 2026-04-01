@@ -116,6 +116,24 @@ class CustomRequired:
     ]
 ```
 
+### Optional Types (Aliases)
+To reduce `str | None` and `Nullable` boilerplate when dealing with large, optional-heavy payloads (like `PATCH` endpoints), `iron-monk` provides built-in type aliases for common primitives.
+
+```python
+from typing import Annotated
+from monk import monk
+from monk.constraints import Len, OptStr, OptInt
+
+@monk
+class UpdatePayload:
+    age: OptInt = None
+    
+    # You can safely stack extra constraints on top of the aliases
+    username: Annotated[OptStr, Len(min_len=3)] = None
+```
+> **💡 Tip:** You aren't limited to the built-in aliases! Because `iron-monk` relies entirely on standard Python `typing`, you can create your own custom aliases for complex or parameterized types (like lists or dictionaries) to keep your codebase DRY.
+
+
 ### Global Nullability (For Type Checkers)
 
 To let runtime type checkers (like `beartype`) handle required fields, configure `iron-monk` to allow `None` by default.

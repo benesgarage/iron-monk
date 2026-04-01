@@ -738,3 +738,19 @@ def test_value_unwrappers() -> None:
     assert exc.value.errors[0]["code"] == "Email"
 
     settings.unwrappers = {}  # Cleanup
+
+
+def test_optional_type_aliases() -> None:
+    """Ensures that built-in Opt* type aliases flatten correctly when combined with other constraints."""
+    from monk.constraints import OptStr, OptInt
+
+    @monk
+    class OptModel:
+        name: Annotated[OptStr, Len(min_len=3)] = None
+        age: OptInt = None
+
+    assert validate(OptModel()).name is None
+    assert validate(OptModel(name="kai", age=25)).name == "kai"
+
+    with pytest.raises(ValidationError):
+        validate(OptModel(name="ab"))
