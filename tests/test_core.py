@@ -16,7 +16,6 @@ from monk.constraints import (
     Interval,
     MultipleOf,
     Len,
-    Nullable,
     NotNull,
     IsAlpha,
     IsAlnum,
@@ -388,7 +387,7 @@ def test_explicit_nullability() -> None:
         email: Annotated[str, Email]
 
         # Top-Level Optional. Passing None is safe.
-        age: Annotated[int | None, Nullable, Interval(ge=18)] = None
+        age: Annotated[int, Interval(ge=18)] | None = None
 
     with pytest.raises(ValidationError) as exc:
         validate(RequiredModel(email=None))  # type: ignore
@@ -620,7 +619,7 @@ def test_return_validation_aggregation_and_recursion() -> None:
 
 def test_return_validation_none_rejection() -> None:
     """Covers the `if value is None` block in `validate_return`."""
-    from monk.constraints import Nullable, Len
+    from monk.constraints import Len
 
     @monk
     def get_name() -> Annotated[str, Len(min_len=2)]:
@@ -633,7 +632,7 @@ def test_return_validation_none_rejection() -> None:
     assert exc.value.errors[0]["field"] == "return"
 
     @monk
-    def get_nullable_name() -> Annotated[str | None, Nullable, Len(min_len=2)]:
+    def get_nullable_name() -> Annotated[str, Len(min_len=2)] | None:
         return None
 
     assert get_nullable_name() is None
@@ -641,7 +640,7 @@ def test_return_validation_none_rejection() -> None:
 
 def test_argument_validation_none_rejection() -> None:
     """Covers the `if value is None` block in `validate_arguments`."""
-    from monk.constraints import Nullable, Len
+    from monk.constraints import Len
 
     @monk
     def process_name(name: Annotated[str, Len(min_len=2)]) -> None:
@@ -654,7 +653,7 @@ def test_argument_validation_none_rejection() -> None:
     assert exc.value.errors[0]["field"] == "name"
 
     @monk
-    def process_nullable_name(name: Annotated[str | None, Nullable, Len(min_len=2)]) -> None:
+    def process_nullable_name(name: Annotated[str, Len(min_len=2)] | None) -> None:
         pass
 
     process_nullable_name(name=None)
@@ -740,17 +739,65 @@ def test_value_unwrappers() -> None:
     settings.unwrappers = {}  # Cleanup
 
 
-def test_optional_type_aliases() -> None:
-    """Ensures that built-in Opt* type aliases flatten correctly when combined with other constraints."""
-    from monk.constraints import OptStr, OptInt
+def test_union_branch_routing() -> None:
+    """Proves that Union types act as routing boundaries, respecting specific constraints per type."""
 
     @monk
-    class OptModel:
-        name: Annotated[OptStr, Len(min_len=3)] = None
-        age: OptInt = None
+    class MixedModel:
+        target: Annotated[str, Len(max_len=1)] | Annotated[int, Interval(gt=2)] | None = None
 
-    assert validate(OptModel()).name is None
-    assert validate(OptModel(name="kai", age=25)).name == "kai"
+    # 1. Null branch (Safely bypassed because None is in the union)
+    assert validate(MixedModel()).target is None
 
-    with pytest.raises(ValidationError):
-        validate(OptModel(name="ab"))
+    # 2. String branch
+    assert validate(MixedModel(target="A")).target == "A"
+    with pytest.raises(ValidationError) as exc1:
+        validate(MixedModel(target="AB"))
+    assert "at least one" in exc1.value.errors[0]["message"]
+
+    # 3. Int branch
+    assert validate(MixedModel(target=3)).target == 3
+    with pytest.raises(ValidationError) as exc2:
+        validate(MixedModel(target=1))
+    assert "at least one" in exc2.value.errors[0]["message"]
+
+
+def test_union_branch_edge_cases() -> None:
+    """Covers edge cases in Union extraction, such as unannotated branches, wrappers, Nullable, and NotNull."""
+    from monk.constraints import Nullable, NotNull
+
+    T_Some = TypeVar("T_Some")
+
+    class Some(Generic[T_Some]):
+        def __init__(self, value: T_Some):
+            self.value = value
+
+    settings.unwrappers = {Some: lambda x: x.value}
+
+    @monk
+    class EdgeCaseModel:
+        wrapped_or_unannotated: int | Some[Annotated[str, Email]]
+        explicit_nullable: int | Annotated[str, Nullable, Email]
+        explicit_notnull: int | Annotated[str, NotNull, Email]
+
+    # 1. Unannotated int branch
+    assert (
+        validate(
+            EdgeCaseModel(wrapped_or_unannotated=123, explicit_nullable=1, explicit_notnull=2)
+        ).wrapped_or_unannotated
+        == 123
+    )
+
+    # 2. Wrapper branch
+    model = validate(
+        EdgeCaseModel(
+            wrapped_or_unannotated=Some("test@domain.com"),
+            explicit_nullable=1,
+            explicit_notnull=2,
+        )
+    )
+
+    assert not isinstance(model.wrapped_or_unannotated, int)
+    assert model.wrapped_or_unannotated.value == "test@domain.com"
+
+    settings.unwrappers = {}  # Cleanup

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0]
+
+### Added
+- **Native Union Routing:** `iron-monk` now natively intercepts `Union` and the `|` operator. Validation is routed to the correct branch, and if no branch is satisfied, an aggregated "Must satisfy at least one" error is thrown.
+- **Native Optional Fields:** Standard Python optionality (e.g., `Annotated[str, Email] | None`) is now natively supported. The explicit `Nullable` constraint is no longer required for class or function type hints (though it remains available for functional APIs like `validate_stream` and `Each`).
+
+### Removed (Breaking)
+- **Optional Type Aliases:** Removed `OptStr`, `OptInt`, `OptFloat`, `OptBool`, and `OptAny` type aliases from `monk.constraints`. With native union routing, standard Python syntax (`| None`) is the recommended approach.
+
+### Maintenance
+- **Dependencies:** Bumped internal development, testing, and integration dependencies to their latest versions via `uv`.
+
 ## [0.19.2]
 
 ### Fixed

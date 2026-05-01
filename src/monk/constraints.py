@@ -152,14 +152,6 @@ class Nullable:
         pass
 
 
-# Standard Type Aliases for common Nullable types to reduce boilerplate
-OptStr = Annotated[str | None, Nullable]
-OptInt = Annotated[int | None, Nullable]
-OptFloat = Annotated[float | None, Nullable]
-OptBool = Annotated[bool | None, Nullable]
-OptAny = Annotated[Any | None, Nullable]
-
-
 @constraint
 class NotNull:
     """A marker constraint to explicitly forbid None values."""

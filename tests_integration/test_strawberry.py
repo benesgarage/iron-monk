@@ -1,6 +1,6 @@
 from typing import Annotated, TypedDict
 from monk import monk, validate, validate_dict
-from monk.constraints import Email, HexColor, Interval, Trimmed, URL, Nullable
+from monk.constraints import Email, HexColor, Interval, Trimmed, URL
 
 
 def test_strawberry_input_validation() -> None:
@@ -95,7 +95,7 @@ def test_strawberry_argument_validation() -> None:
         def search_products(
             self,
             limit: Annotated[int, Interval(gt=0, le=100)] = 20,
-            search_term: Annotated[str | None, Nullable, Trimmed] = None,
+            search_term: Annotated[str, Trimmed] | None = None,
         ) -> str:
             return f"Found {limit} products"
 

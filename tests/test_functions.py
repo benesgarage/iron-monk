@@ -1,7 +1,7 @@
 import pytest
 from typing import Annotated, Iterator
 from monk import monk
-from monk.constraints import Email, Interval, Len, Nullable, LowerCase, Each
+from monk.constraints import Email, Interval, Len, LowerCase, Each
 from monk.exceptions import ValidationError
 
 
@@ -45,7 +45,7 @@ def test_function_nullability() -> None:
     @monk
     def process_data(
         required_tag: Annotated[str, Len(min_len=3)],
-        optional_tag: Annotated[str | None, Nullable, Len(min_len=3)] = None,
+        optional_tag: Annotated[str, Len(min_len=3)] | None = None,
     ) -> None:
         pass
 

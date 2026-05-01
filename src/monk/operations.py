@@ -1,5 +1,6 @@
 import functools
 import inspect
+import types
 from typing import (
     TypeVar,
     Any,
@@ -10,6 +11,7 @@ from typing import (
     get_origin,
     get_args,
     get_type_hints,
+    Union,
 )
 from .exceptions import ValidationError
 from .types import ErrorDict
@@ -19,6 +21,31 @@ from .protocols import MonkConstraint
 T = TypeVar("T")
 
 _PRIMITIVE_TYPES = frozenset((str, int, float, bool, type(None)))
+
+_UNION_TYPES: tuple[Any, ...] = (Union, types.UnionType)
+
+
+class _UnionRouter(MonkConstraint):
+    """An internal constraint used to route and evaluate Union branches."""
+
+    def __init__(self, union_branches: list[list[MonkConstraint]]) -> None:
+        self.union_branches = union_branches
+
+    def validate(self, value: Any) -> None:
+        for branch in self.union_branches:
+            if not branch:
+                # Branch with no constraints, allowing value to pass (e.g. unannotated base type)
+                return
+            branch_passed = True
+            for c in branch:
+                try:
+                    c.validate(value)
+                except (ValueError, TypeError, ValidationError):
+                    branch_passed = False
+                    break
+            if branch_passed:
+                return
+        raise ValueError("Value did not match any of the allowed union branches. Must satisfy at least one.")
 
 
 def _prepare_constraints(constraints: Iterable[Any]) -> tuple[list[MonkConstraint], bool, bool, Any]:
@@ -62,6 +89,72 @@ def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, tuple[list[MonkCo
         if not metadata:
             args = get_args(hint)
             origin = get_origin(hint)
+
+            if origin in _UNION_TYPES:
+                branches: list[list[MonkConstraint]] = []
+                is_nullable_global = False
+                is_not_null_global = False
+                not_null_c_global = None
+
+                for arg in args:
+                    if arg is type(None):
+                        is_nullable_global = True
+                        continue
+
+                    arg_metadata = getattr(arg, "__metadata__", [])
+
+                    if not arg_metadata:
+                        inner_args = get_args(arg)
+                        inner_origin = get_origin(arg)
+                        if (
+                            inner_args
+                            and inner_origin not in (list, set, frozenset, tuple, dict)
+                            and inner_origin not in _UNION_TYPES
+                        ):
+                            for inner_arg in inner_args:
+                                inner_metadata = getattr(inner_arg, "__metadata__", [])
+                                if inner_metadata:
+                                    arg_metadata = inner_metadata
+                                    break
+
+                    if arg_metadata:
+                        c_list, n, nn, nnc = _prepare_constraints(arg_metadata)
+                        if n:
+                            is_nullable_global = True
+                        if nn:
+                            is_not_null_global = True
+                            not_null_c_global = nnc
+                        branches.append(c_list)
+                    else:
+                        branches.append([])
+
+                non_empty_branches = [b for b in branches if b]
+                if not non_empty_branches:
+                    compiled_rules: tuple[list[MonkConstraint], bool, bool, Any | None] = (
+                        [],
+                        is_nullable_global,
+                        is_not_null_global,
+                        not_null_c_global,
+                    )
+                elif len(branches) == 1:
+                    compiled_rules = (
+                        branches[0],
+                        is_nullable_global,
+                        is_not_null_global,
+                        not_null_c_global,
+                    )
+                else:
+                    compiled_rules = (
+                        [_UnionRouter(branches)],
+                        is_nullable_global,
+                        is_not_null_global,
+                        not_null_c_global,
+                    )
+
+                if compiled_rules[0] or compiled_rules[1] or compiled_rules[2]:
+                    rules[name] = compiled_rules
+                continue
+
             if args and origin not in (list, set, frozenset, tuple, dict):
                 for arg in args:
                     metadata = getattr(arg, "__metadata__", [])

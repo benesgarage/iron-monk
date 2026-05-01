@@ -2,14 +2,14 @@ import pytest
 from typing import TypedDict, Annotated
 from monk import monk, validate_dict
 from monk.exceptions import ValidationError
-from monk.constraints import Email, Interval, Nullable, Nested, Each, Len
+from monk.constraints import Email, Interval, Nested, Each, Len
 
 
 def test_typeddict_validation() -> None:
     class UserDict(TypedDict):
         email: Annotated[str, Email]
         age: Annotated[int, Interval(ge=18)]
-        nickname: Annotated[str | None, Nullable, Interval(ge=1)]
+        nickname: Annotated[str, Interval(ge=1)] | None
 
     # 1. Success (Returns the dict unchanged)
     data = {"email": "test@domain.com", "age": 25, "nickname": None}
