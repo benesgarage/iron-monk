@@ -690,49 +690,6 @@ def test_argument_validation_none_rejection() -> None:
     process_nullable_name(name=None)
 
 
-def test_ignored_sentinels() -> None:
-    """Covers global sentinel skipping for PATCH requests/GraphQL APIs."""
-
-    settings.ignored_sentinels = (UNSET,)
-
-    @monk
-    class PatchModel:
-        # Resolves as Union[UnsetType, Annotated[str, Email]]
-        email: UnsetType | Annotated[str, Email] = UNSET
-
-    # Should completely bypass NotNull and Email checks because the value is the sentinel
-    validate(PatchModel())
-
-    from monk.operations import validate_dict, validate_stream
-    from typing import TypedDict
-
-    # 1. Cover validate_arguments
-    @monk
-    def process_email(email: UnsetType | Annotated[str, Email] = UNSET) -> None:
-        pass
-
-    process_email(email=UNSET)
-
-    # 2. Cover validate_return
-    @monk
-    def get_email() -> UnsetType | Annotated[str, Email]:
-        return UNSET
-
-    get_email()
-
-    # 3. Cover validate_dict
-    class PatchDict(TypedDict):
-        email: UnsetType | Annotated[str, Email]
-
-    validate_dict({"email": UNSET}, PatchDict)
-
-    # 4. Cover validate_stream
-    gen = validate_stream([UNSET], Email)
-    assert next(gen) is UNSET
-
-    settings.ignored_sentinels = ()  # Cleanup
-
-
 def test_value_unwrappers() -> None:
     """Covers global wrapper unpacking for framework wrappers like Strawberry's Some."""
 
@@ -836,7 +793,6 @@ def test_union_branch_edge_cases() -> None:
 def test_generic_type_alias_resolution() -> None:
     """Covers type alias extraction, simulating patterns like Strawberry's Maybe/Some."""
     settings.unwrappers = {SomeAlias: lambda x: x.value}
-    settings.ignored_sentinels = (UNSET,)
 
     @monk
     class AliasModel:
@@ -883,7 +839,6 @@ def test_wrapper_inner_vs_outer_nullability() -> None:
     assert exc.value.errors[0]["code"] == "NotNull"
 
     settings.unwrappers = {}  # Cleanup
-    settings.ignored_sentinels = ()
 
 
 def test_global_type_metadata_injection() -> None:

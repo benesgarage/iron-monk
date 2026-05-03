@@ -38,32 +38,18 @@ assert isinstance(req.email, SomeWrapper)
 assert req.email.value == "test@domain.com"
 ```
 
-## Ignoring Sentinels (PATCH Endpoints)
+## Type metadata
 
-When building `PATCH` updates, frameworks often use a singleton sentinel object (like `UNSET` or `Undefined`) to differentiate between a field explicitly set to `None` versus a field that was completely omitted by the client.
-
-You can use `settings.ignored_sentinels` to tell `iron-monk` to instantly skip validation if it encounters one of these singletons.
+When integrating `iron-monk` with complex frameworks like Strawberry GraphQL, SQLAlchemy, or custom internal tooling, you may encounter custom generic wrappers (e.g., `Maybe[T]`, `Mapped[T]`). 
+You can configure `iron-monk` globally to tie constraints to these types when detected.
 
 ```python
-from typing import Annotated
-from monk import monk, validate, settings
-from monk.constraints import Email
+import strawberry
+from monk import settings
+from monk.constraints import Nullable
 
-# A mock framework singleton sentinel
-class UnsetType:
-    pass
-
-UNSET = UnsetType()
-
-# 1. Tell iron-monk to skip validation for this exact instance
-settings.ignored_sentinels = (UNSET,)
-
-@monk
-class PatchRequest:
-    email: UnsetType | Annotated[str, Email] = UNSET
-
-# 2. Validation is safely skipped because the value is UNSET!
-req = validate(PatchRequest())
-
-assert req.email is UNSET
+# Type Metadata (Compile-Time Schema)
+# Teach iron-monk to inject specific constraints whenever it encounters a custom type hint.
+# E.g., Map Strawberry's `Maybe` to `[Nullable]` so the schema knows it's optional.
+settings.type_metadata = {strawberry.Maybe: [Nullable]}
 ```

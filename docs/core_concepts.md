@@ -208,19 +208,3 @@ class NotificationService:
     async def ping(ip: Annotated[str, IPAddress]):
         pass
 ```
-
-## Framework Interoperability
-
-When integrating `iron-monk` with complex frameworks like Strawberry GraphQL, SQLAlchemy, or custom internal tooling, you may encounter custom generic wrappers (e.g., `Maybe[T]`, `Mapped[T]`). 
-You can configure `iron-monk` globally to understand these patterns without writing repetitive validation boilerplate.
-
-```python
-import strawberry
-from monk import settings
-from monk.constraints import Nullable
-
-# Type Metadata (Compile-Time Schema)
-# Teach iron-monk to inject specific constraints whenever it encounters a custom type hint.
-# E.g., Map Strawberry's `Maybe` to `[Nullable]` so the schema knows it's optional.
-settings.type_metadata = {strawberry.Maybe: [Nullable]}
-```

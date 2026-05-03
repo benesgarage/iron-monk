@@ -270,9 +270,6 @@ def validate_arguments(
                     errors.append({"field": arg_name, "message": msg, "code": code})
                 continue
 
-            if settings.ignored_sentinels and raw_value in settings.ignored_sentinels:
-                continue
-
             value = settings.unwrap(raw_value)
             if value is None:
                 if not is_inner_nullable and (is_not_null or not settings.default_allow_none):
@@ -313,8 +310,6 @@ def validate_return(raw_value: Any, rule_tuple: tuple[list[MonkConstraint], bool
             msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
             code = getattr(not_null_c, "code", None) or "NotNull"
             errors.append({"field": "return", "message": msg, "code": code})
-    elif settings.ignored_sentinels and raw_value in settings.ignored_sentinels:
-        pass
     else:
         value = settings.unwrap(raw_value)
         if value is None:
@@ -394,9 +389,6 @@ def validate_dict(
                 errors.append({"field": field_name, "message": msg, "code": code})
             continue
 
-        if settings.ignored_sentinels and raw_value in settings.ignored_sentinels:
-            continue
-
         value = settings.unwrap(raw_value)
         if value is None:
             if not is_inner_nullable and (is_not_null or not settings.default_allow_none):
@@ -450,9 +442,6 @@ def _validate_stream_item(item: Any, constraints: list[MonkConstraint], errors: 
         # Stream items are always considered required unless Nullable is present
         if not any(type(c).__name__ == "Nullable" for c in constraints):
             errors.append({"field": "", "message": "Stream items cannot be null.", "code": "NotNull"})
-        return
-
-    if settings.ignored_sentinels and item in settings.ignored_sentinels:
         return
 
     for c in constraints:
@@ -591,9 +580,6 @@ def validate(instance: T) -> T:
                     msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
                     code = getattr(not_null_c, "code", None) or "NotNull"
                     errors.append({"field": field_name, "message": msg, "code": code})
-                continue
-
-            if settings.ignored_sentinels and raw_value in settings.ignored_sentinels:
                 continue
 
             value = settings.unwrap(raw_value)

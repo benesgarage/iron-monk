@@ -7,7 +7,6 @@ class MonkSettings:
 
     defer: bool = True
     default_allow_none: bool = False
-    ignored_sentinels: tuple[Any, ...] = ()
     unwrappers: dict[Any, Callable[[Any], Any]] = {}
     type_metadata: dict[Any, list[Any]] = {}
 

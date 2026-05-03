@@ -107,42 +107,6 @@ def test_strawberry_argument_validation() -> None:
     assert "Validation failed" in str(res_bad.errors[0].original_error)
 
 
-def test_strawberry_unset_sentinel() -> None:
-    import strawberry
-    from monk import settings
-
-    # Tell iron-monk to completely ignore Strawberry's omitted-field runtime sentinel
-    settings.ignored_sentinels = (strawberry.UNSET,)
-
-    @strawberry.input
-    @monk
-    class PatchInput:
-        # Resolves as Union[str, None, UNSET] under the hood, perfectly preserving your annotations
-        email: strawberry.Maybe[Annotated[str, Email]] = strawberry.UNSET
-
-    @strawberry.type
-    class Query:
-        @strawberry.field
-        def patch_user_sentinel(self, input: PatchInput) -> str:
-            valid = validate(input)
-            if valid.email is strawberry.UNSET:
-                return "Omitted"
-            return str(valid.email)
-
-    schema = strawberry.Schema(query=Query)
-
-    # 1. Field omitted (UNSET is preserved and validation is safely skipped)
-    res1 = schema.execute_sync("query { patchUserSentinel(input: {}) }")
-    assert res1.errors is None
-    assert res1.data == {"patchUserSentinel": "Omitted"}
-
-    # 2. Field provided but invalid (Validation is strictly enforced)
-    res2 = schema.execute_sync('query { patchUserSentinel(input: {email: "bad"}) }')
-    assert res2.errors is not None
-
-    settings.ignored_sentinels = ()  # Cleanup
-
-
 def test_strawberry_value_unwrappers() -> None:
     import strawberry
     from strawberry.types.maybe import Some
@@ -216,7 +180,7 @@ def test_strawberry_one_of_input() -> None:
     assert res2.errors is not None
     assert "exactly one" in str(res2.errors[0].message)
 
-    settings.ignored_sentinels = ()  # Cleanup
+    settings.unwrappers = {}
 
 
 def test_strawberry_comprehensive_maybe_patch() -> None:
@@ -226,6 +190,7 @@ def test_strawberry_comprehensive_maybe_patch() -> None:
     from monk.constraints import Each, LowerCase, Nullable
 
     settings.type_metadata = {strawberry.Maybe: [Nullable]}
+    settings.unwrappers = {strawberry.Some: lambda x: x.value}
 
     @monk
     @strawberry.input
@@ -271,3 +236,4 @@ def test_strawberry_comprehensive_maybe_patch() -> None:
     assert "islower" in str(res6.errors[0].original_error)
 
     settings.type_metadata = {}
+    settings.unwrappers = {}
