@@ -28,23 +28,43 @@ _UNION_TYPES: tuple[Any, ...] = (Union, types.UnionType)
 class _UnionRouter(MonkConstraint):
     """An internal constraint used to route and evaluate Union branches."""
 
-    def __init__(self, union_branches: list[list[MonkConstraint]]) -> None:
+    def __init__(self, union_branches: list[tuple[Any, list[MonkConstraint]]]) -> None:
         self.union_branches = union_branches
+        self.code = "Union"
 
     def validate(self, value: Any) -> None:
-        for branch in self.union_branches:
+        errors: list[Exception] = []
+        for branch_type, branch in self.union_branches:
+            origin = get_origin(branch_type) or branch_type
+            if origin is not Any:
+                try:
+                    if not isinstance(value, origin):
+                        continue
+                except TypeError:
+                    pass
+
             if not branch:
-                # Branch with no constraints, allowing value to pass (e.g. unannotated base type)
                 return
+
             branch_passed = True
             for c in branch:
                 try:
                     c.validate(value)
-                except (ValueError, TypeError, ValidationError):
+                except ValidationError as e:
+                    errors.append(e)
+                    branch_passed = False
+                    break
+                except (ValueError, TypeError) as e:
+                    error_code = getattr(c, "code", None) or type(c).__name__
+                    errors.append(ValidationError([{"field": "", "message": str(e), "code": error_code}]))
                     branch_passed = False
                     break
             if branch_passed:
                 return
+
+        if len(errors) == 1:
+            raise errors[0]
+
         raise ValueError("Value did not match any of the allowed union branches. Must satisfy at least one.")
 
 
@@ -79,28 +99,42 @@ def _prepare_constraints(constraints: Iterable[Any]) -> tuple[list[MonkConstrain
     return actual_constraints, is_nullable, is_not_null, not_null_c
 
 
-def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, tuple[list[MonkConstraint], bool, bool, Any]]:
+def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, tuple[list[MonkConstraint], bool, bool, bool, Any]]:
     """Extracts validation rules from type hints into highly optimized structures."""
-    rules: dict[str, tuple[list[MonkConstraint], bool, bool, Any]] = {}
+    rules: dict[str, tuple[list[MonkConstraint], bool, bool, bool, Any]] = {}
+    type_meta_map = getattr(settings, "type_metadata", {})
 
     for name, hint in hints.items():
         metadata = getattr(hint, "__metadata__", [])
+        extra_meta = type_meta_map.get(get_origin(hint) or hint, [])
 
         if not metadata:
             args = get_args(hint)
             origin = get_origin(hint)
 
+            if args and origin not in (list, set, frozenset, tuple, dict) and origin not in _UNION_TYPES:
+                hint = args[0]
+                metadata = getattr(hint, "__metadata__", [])
+                args = get_args(hint)
+                origin = get_origin(hint)
+
+                inner_extra = type_meta_map.get(origin or hint, [])
+                if inner_extra:
+                    extra_meta = list(extra_meta) + list(inner_extra)
+
             if origin in _UNION_TYPES:
-                branches: list[list[MonkConstraint]] = []
-                is_nullable_global = False
+                branches: list[tuple[Any, list[MonkConstraint]]] = []
+                is_outer_nullable = False
+                is_inner_nullable = False
                 is_not_null_global = False
                 not_null_c_global = None
 
                 for arg in args:
                     if arg is type(None):
-                        is_nullable_global = True
+                        is_outer_nullable = True
                         continue
 
+                    arg_type = arg
                     arg_metadata = getattr(arg, "__metadata__", [])
 
                     if not arg_metadata:
@@ -111,60 +145,80 @@ def _extract_monk_metadata(hints: dict[str, Any]) -> dict[str, tuple[list[MonkCo
                             and inner_origin not in (list, set, frozenset, tuple, dict)
                             and inner_origin not in _UNION_TYPES
                         ):
+                            arg_type = inner_args[0]
                             for inner_arg in inner_args:
                                 inner_metadata = getattr(inner_arg, "__metadata__", [])
                                 if inner_metadata:
                                     arg_metadata = inner_metadata
                                     break
 
+                    if getattr(arg_type, "__metadata__", None):
+                        base_args = get_args(arg_type)
+                        if base_args:
+                            arg_type = base_args[0]
+
+                    arg_extra_meta = type_meta_map.get(get_origin(arg) or arg, [])
+                    if arg_extra_meta:
+                        arg_metadata = list(arg_metadata) + list(arg_extra_meta)
+
                     if arg_metadata:
                         c_list, n, nn, nnc = _prepare_constraints(arg_metadata)
                         if n:
-                            is_nullable_global = True
+                            is_inner_nullable = True
                         if nn:
                             is_not_null_global = True
                             not_null_c_global = nnc
-                        branches.append(c_list)
+                        branches.append((arg_type, c_list))
                     else:
-                        branches.append([])
+                        branches.append((arg_type, []))
 
-                non_empty_branches = [b for b in branches if b]
+                non_empty_branches = [b for b in branches if b[1]]
                 if not non_empty_branches:
-                    compiled_rules: tuple[list[MonkConstraint], bool, bool, Any | None] = (
+                    compiled_rules: tuple[list[MonkConstraint], bool, bool, bool, Any | None] = (
                         [],
-                        is_nullable_global,
+                        is_outer_nullable,
+                        is_inner_nullable,
                         is_not_null_global,
                         not_null_c_global,
                     )
                 elif len(branches) == 1:
                     compiled_rules = (
-                        branches[0],
-                        is_nullable_global,
+                        branches[0][1],
+                        is_outer_nullable,
+                        is_inner_nullable,
                         is_not_null_global,
                         not_null_c_global,
                     )
                 else:
                     compiled_rules = (
                         [_UnionRouter(branches)],
-                        is_nullable_global,
+                        is_outer_nullable,
+                        is_inner_nullable,
                         is_not_null_global,
                         not_null_c_global,
                     )
 
-                if compiled_rules[0] or compiled_rules[1] or compiled_rules[2]:
+                if extra_meta:
+                    ex_c, ex_n, ex_nn, ex_nnc = _prepare_constraints(extra_meta)
+                    c_list = compiled_rules[0] + ex_c
+                    n_out = compiled_rules[1]
+                    n_in = compiled_rules[2] or ex_n
+                    nn = compiled_rules[3] or ex_nn
+                    nnc = ex_nnc if ex_nn else compiled_rules[4]
+                    compiled_rules = (c_list, n_out, n_in, nn, nnc)
+
+                if compiled_rules[0] or compiled_rules[1] or compiled_rules[2] or compiled_rules[3]:
                     rules[name] = compiled_rules
                 continue
 
-            if args and origin not in (list, set, frozenset, tuple, dict):
-                for arg in args:
-                    metadata = getattr(arg, "__metadata__", [])
-                    if metadata:
-                        break
+        if extra_meta:
+            metadata = list(metadata) + list(extra_meta)
 
         if metadata:
-            compiled_rules = _prepare_constraints(metadata)
+            c_list, n, nn, nnc = _prepare_constraints(metadata)
+            compiled_rules = (c_list, n, n, nn, nnc)
             # Only store it if there are actual constraints or nullability overrides
-            if compiled_rules[0] or compiled_rules[1] or compiled_rules[2]:
+            if compiled_rules[0] or compiled_rules[1] or compiled_rules[3]:
                 rules[name] = compiled_rules
 
     return rules
@@ -200,24 +254,31 @@ def _recurse(val: Any, prefix: str, errors: list[ErrorDict]) -> None:
 
 
 def validate_arguments(
-    arguments: dict[str, Any], rules: dict[str, tuple[list[MonkConstraint], bool, bool, Any]]
+    arguments: dict[str, Any], rules: dict[str, tuple[list[MonkConstraint], bool, bool, bool, Any]]
 ) -> None:
     """Validates a dictionary of function arguments against extracted constraints."""
     errors: list[ErrorDict] = []
-    for arg_name, value in arguments.items():
-        value = settings.unwrap(value)
+    for arg_name, raw_value in arguments.items():
         rule_tuple = rules.get(arg_name)
         if rule_tuple:
-            constraints, is_nullable, is_not_null, not_null_c = rule_tuple
+            constraints, is_outer_nullable, is_inner_nullable, is_not_null, not_null_c = rule_tuple
 
-            if value is None:
-                if not is_nullable and (is_not_null or not settings.default_allow_none):
+            if raw_value is None:
+                if not is_outer_nullable and (is_not_null or not settings.default_allow_none):
                     msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
                     code = getattr(not_null_c, "code", None) or "NotNull"
                     errors.append({"field": arg_name, "message": msg, "code": code})
                 continue
 
-            if settings.ignored_sentinels and value in settings.ignored_sentinels:
+            if settings.ignored_sentinels and raw_value in settings.ignored_sentinels:
+                continue
+
+            value = settings.unwrap(raw_value)
+            if value is None:
+                if not is_inner_nullable and (is_not_null or not settings.default_allow_none):
+                    msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
+                    code = getattr(not_null_c, "code", None) or "NotNull"
+                    errors.append({"field": arg_name, "message": msg, "code": code})
                 continue
 
             for c in constraints:
@@ -233,47 +294,55 @@ def validate_arguments(
 
             if type(value) not in _PRIMITIVE_TYPES:
                 _recurse(value, arg_name, errors)
-        elif type(value) not in _PRIMITIVE_TYPES:
-            _recurse(value, arg_name, errors)
+        else:
+            value = settings.unwrap(raw_value)
+            if type(value) not in _PRIMITIVE_TYPES:
+                _recurse(value, arg_name, errors)
 
     if errors:
         raise ValidationError(errors)
 
 
-def validate_return(value: Any, rule_tuple: tuple[list[MonkConstraint], bool, bool, Any]) -> None:
+def validate_return(raw_value: Any, rule_tuple: tuple[list[MonkConstraint], bool, bool, bool, Any]) -> None:
     """Validates a function's return value against extracted constraints."""
     errors: list[ErrorDict] = []
-    value = settings.unwrap(value)
-    constraints, is_nullable, is_not_null, not_null_c = rule_tuple
+    constraints, is_outer_nullable, is_inner_nullable, is_not_null, not_null_c = rule_tuple
 
-    if value is None:
-        if not is_nullable and (is_not_null or not settings.default_allow_none):
+    if raw_value is None:
+        if not is_outer_nullable and (is_not_null or not settings.default_allow_none):
             msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
             code = getattr(not_null_c, "code", None) or "NotNull"
             errors.append({"field": "return", "message": msg, "code": code})
-    elif settings.ignored_sentinels and value in settings.ignored_sentinels:
+    elif settings.ignored_sentinels and raw_value in settings.ignored_sentinels:
         pass
     else:
-        for c in constraints:
-            try:
-                c.validate(value)
-            except ValidationError as e:
-                for err in e.errors:
-                    err["field"] = f"return{err.get('field', '')}"
-                    errors.append(err)
-            except (ValueError, TypeError) as e:
-                error_code = getattr(c, "code", None) or type(c).__name__
-                errors.append({"field": "return", "message": str(e), "code": error_code})
+        value = settings.unwrap(raw_value)
+        if value is None:
+            if not is_inner_nullable and (is_not_null or not settings.default_allow_none):
+                msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
+                code = getattr(not_null_c, "code", None) or "NotNull"
+                errors.append({"field": "return", "message": msg, "code": code})
+        else:
+            for c in constraints:
+                try:
+                    c.validate(value)
+                except ValidationError as e:
+                    for err in e.errors:
+                        err["field"] = f"return{err.get('field', '')}"
+                        errors.append(err)
+                except (ValueError, TypeError) as e:
+                    error_code = getattr(c, "code", None) or type(c).__name__
+                    errors.append({"field": "return", "message": str(e), "code": error_code})
 
-        if type(value) not in _PRIMITIVE_TYPES:
-            _recurse(value, "return", errors)
+            if type(value) not in _PRIMITIVE_TYPES:
+                _recurse(value, "return", errors)
 
     if errors:
         raise ValidationError(errors)
 
 
 @functools.lru_cache(maxsize=None)
-def _get_schema_rules(schema: type) -> tuple[set[str], dict[str, tuple[list[MonkConstraint], bool, bool, Any]]]:
+def _get_schema_rules(schema: type) -> tuple[set[str], dict[str, tuple[list[MonkConstraint], bool, bool, bool, Any]]]:
     """Caches the allowed keys and extracted rules for a given TypedDict schema to maximize performance."""
     hints = get_type_hints(schema, include_extras=True)
     return set(hints.keys()), _extract_monk_metadata(hints)
@@ -315,17 +384,25 @@ def validate_dict(
         if partial and field_name not in data:
             continue
 
-        value = settings.unwrap(data.get(field_name))
-        constraints, is_nullable, is_not_null, not_null_c = rule_tuple
+        raw_value = data.get(field_name)
+        constraints, is_outer_nullable, is_inner_nullable, is_not_null, not_null_c = rule_tuple
 
-        if value is None:
-            if not is_nullable and (is_not_null or not settings.default_allow_none):
+        if raw_value is None:
+            if not is_outer_nullable and (is_not_null or not settings.default_allow_none):
                 msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
                 code = getattr(not_null_c, "code", None) or "NotNull"
                 errors.append({"field": field_name, "message": msg, "code": code})
             continue
 
-        if settings.ignored_sentinels and value in settings.ignored_sentinels:
+        if settings.ignored_sentinels and raw_value in settings.ignored_sentinels:
+            continue
+
+        value = settings.unwrap(raw_value)
+        if value is None:
+            if not is_inner_nullable and (is_not_null or not settings.default_allow_none):
+                msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
+                code = getattr(not_null_c, "code", None) or "NotNull"
+                errors.append({"field": field_name, "message": msg, "code": code})
             continue
 
         for c in constraints:
@@ -381,6 +458,9 @@ def _validate_stream_item(item: Any, constraints: list[MonkConstraint], errors: 
     for c in constraints:
         try:
             c.validate(item)
+        except ValidationError as e:
+            for err in e.errors:
+                errors.append(err)
         except (ValueError, TypeError) as e:
             error_code = getattr(c, "code", None) or type(c).__name__
             errors.append({"field": "", "message": str(e), "code": error_code})
@@ -500,20 +580,28 @@ def validate(instance: T) -> T:
     fields = object.__getattribute__(instance, "__monk_fields__")
 
     for field_name in fields:
-        value = settings.unwrap(object.__getattribute__(instance, field_name))
+        raw_value = object.__getattribute__(instance, field_name)
         rule_tuple = rules.get(field_name)
 
         if rule_tuple:
-            constraints, is_nullable, is_not_null, not_null_c = rule_tuple
+            constraints, is_outer_nullable, is_inner_nullable, is_not_null, not_null_c = rule_tuple
 
-            if value is None:
-                if not is_nullable and (is_not_null or not settings.default_allow_none):
+            if raw_value is None:
+                if not is_outer_nullable and (is_not_null or not settings.default_allow_none):
                     msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
                     code = getattr(not_null_c, "code", None) or "NotNull"
                     errors.append({"field": field_name, "message": msg, "code": code})
                 continue
 
-            if settings.ignored_sentinels and value in settings.ignored_sentinels:
+            if settings.ignored_sentinels and raw_value in settings.ignored_sentinels:
+                continue
+
+            value = settings.unwrap(raw_value)
+            if value is None:
+                if not is_inner_nullable and (is_not_null or not settings.default_allow_none):
+                    msg = getattr(not_null_c, "message", None) or "Field is required and cannot be null."
+                    code = getattr(not_null_c, "code", None) or "NotNull"
+                    errors.append({"field": field_name, "message": msg, "code": code})
                 continue
 
             for c in constraints:
@@ -529,8 +617,10 @@ def validate(instance: T) -> T:
 
             if type(value) not in _PRIMITIVE_TYPES:
                 _recurse(value, field_name, errors)
-        elif type(value) not in _PRIMITIVE_TYPES:
-            _recurse(value, field_name, errors)
+        else:
+            value = settings.unwrap(raw_value)
+            if type(value) not in _PRIMITIVE_TYPES:
+                _recurse(value, field_name, errors)
 
     if not errors:
         hook = getattr(instance, "__monk_validate__", None)

@@ -1,7 +1,7 @@
 import pytest
 import datetime
 import importlib
-from typing import Annotated, Any, Generic, TypeVar
+from typing import Annotated, Any, Generic, TypeVar, TypeAlias
 
 from monk import monk, validate, settings, constraint
 from monk.exceptions import UnvalidatedAccessError, ValidationError
@@ -21,6 +21,37 @@ from monk.constraints import (
     IsAlnum,
 )
 from monk.protocols import MonkConstraint
+
+
+T_Alias = TypeVar("T_Alias")
+
+
+class UnsetType:
+    pass
+
+
+UNSET = UnsetType()
+
+
+class SomeAlias(Generic[T_Alias]):
+    def __init__(self, value: T_Alias):
+        self.value = value
+
+
+MaybeUnset: TypeAlias = SomeAlias[T_Alias] | UnsetType
+MaybeNone: TypeAlias = SomeAlias[T_Alias] | None
+
+
+class OuterWrap(Generic[T_Alias]):
+    pass
+
+
+class InnerWrap(Generic[T_Alias]):
+    pass
+
+
+class ArgWrap(Generic[T_Alias]):
+    pass
 
 
 def test_validate_non_monk_object() -> None:
@@ -662,12 +693,6 @@ def test_argument_validation_none_rejection() -> None:
 def test_ignored_sentinels() -> None:
     """Covers global sentinel skipping for PATCH requests/GraphQL APIs."""
 
-    class UnsetType:
-        pass
-
-    # Sentinels in libraries like Strawberry are singleton instances!
-    UNSET = UnsetType()
-
     settings.ignored_sentinels = (UNSET,)
 
     @monk
@@ -753,13 +778,18 @@ def test_union_branch_routing() -> None:
     assert validate(MixedModel(target="A")).target == "A"
     with pytest.raises(ValidationError) as exc1:
         validate(MixedModel(target="AB"))
-    assert "at least one" in exc1.value.errors[0]["message"]
+        assert exc1.value.errors[0]["code"] == "Len"
 
     # 3. Int branch
     assert validate(MixedModel(target=3)).target == 3
     with pytest.raises(ValidationError) as exc2:
         validate(MixedModel(target=1))
-    assert "at least one" in exc2.value.errors[0]["message"]
+        assert exc2.value.errors[0]["code"] == "Interval"
+
+        # 4. Unknown type branch (Completely outside the union)
+        with pytest.raises(ValidationError) as exc3:
+            validate(MixedModel(target=[1, 2]))  # type: ignore
+        assert "at least one" in exc3.value.errors[0]["message"]
 
 
 def test_union_branch_edge_cases() -> None:
@@ -788,7 +818,7 @@ def test_union_branch_edge_cases() -> None:
         == 123
     )
 
-    # 2. Wrapper branch
+    # 2. Wrapper branch & explicit marker bubbled checks
     model = validate(
         EdgeCaseModel(
             wrapped_or_unannotated=Some("test@domain.com"),
@@ -801,3 +831,178 @@ def test_union_branch_edge_cases() -> None:
     assert model.wrapped_or_unannotated.value == "test@domain.com"
 
     settings.unwrappers = {}  # Cleanup
+
+
+def test_generic_type_alias_resolution() -> None:
+    """Covers type alias extraction, simulating patterns like Strawberry's Maybe/Some."""
+    settings.unwrappers = {SomeAlias: lambda x: x.value}
+    settings.ignored_sentinels = (UNSET,)
+
+    @monk
+    class AliasModel:
+        # Should effortlessly resolve the Annotated constraints inside the alias
+        contact: MaybeUnset[Annotated[str, Email]] = UNSET
+
+    # 2. Test Sentinel bypass
+    assert validate(AliasModel()).contact is UNSET
+
+    # 3. Test Wrapper success
+    valid_model = validate(AliasModel(contact=SomeAlias("test@domain.com")))
+    assert isinstance(valid_model.contact, SomeAlias)
+    assert valid_model.contact.value == "test@domain.com"
+
+    # 4. Test Wrapper constraint execution
+    with pytest.raises(ValidationError) as exc:
+        validate(AliasModel(contact=SomeAlias("bad-email")))
+    assert exc.value.errors[0]["code"] == "Email"
+
+    settings.unwrappers = {}  # Cleanup
+
+
+def test_wrapper_inner_vs_outer_nullability() -> None:
+    """Proves that unwrap happens safely, distinguishing between Omitted (None) and Explicit Null (Some(None))."""
+    from monk.constraints import Nullable, Trimmed
+
+    settings.unwrappers = {SomeAlias: lambda x: x.value}
+
+    @monk
+    class PatchUser:
+        email: MaybeNone[Annotated[str, Email]]
+        bio: MaybeNone[Annotated[str, Nullable, Trimmed]]
+
+    # 1. Omitted (None) -> Allowed for both because OUTER is natively nullable
+    valid1 = validate(PatchUser(email=None, bio=None))
+    assert valid1.email is None
+
+    # 2. Explicit Inner Null -> Fails for email, passes for bio because of Nullable
+    with pytest.raises(ValidationError) as exc:
+        validate(PatchUser(email=SomeAlias(None), bio=SomeAlias(None)))  # type: ignore
+
+    assert len(exc.value.errors) == 1
+    assert exc.value.errors[0]["field"] == "email"
+    assert exc.value.errors[0]["code"] == "NotNull"
+
+    settings.unwrappers = {}  # Cleanup
+    settings.ignored_sentinels = ()
+
+
+def test_global_type_metadata_injection() -> None:
+    """Proves that custom types can be mapped to predefined constraints globally."""
+    from monk.constraints import Nullable, Email
+
+    T_Val = TypeVar("T_Val")
+
+    class CustomWrapper(Generic[T_Val]):
+        def __init__(self, value: T_Val):
+            self.value = value
+
+    settings.type_metadata = {CustomWrapper: [Nullable]}
+    settings.unwrappers = {CustomWrapper: lambda x: x.value}
+
+    @monk
+    class GlobalMetaModel:
+        # Natively infers Nullable because CustomWrapper is registered in type_metadata!
+        email: CustomWrapper[Annotated[str, Email]]
+
+    # 1. Null safely bypasses constraints natively
+    assert validate(GlobalMetaModel(email=None)).email is None  # type: ignore
+
+    # 2. Wrapped Invalid data fails specific constraint
+    with pytest.raises(ValidationError) as exc:
+        validate(GlobalMetaModel(email=CustomWrapper("bad-email")))
+    assert exc.value.errors[0]["code"] == "Email"
+
+    settings.unwrappers = {}  # Cleanup
+    settings.type_metadata = {}  # Cleanup
+
+
+def test_coverage_cleanup_operations() -> None:
+    from typing import Literal, TypedDict, Union, AsyncIterator
+    import types
+    import anyio
+    from monk.constraints import Email, Each, LowerCase, Len, NotNull
+    from monk.operations import validate_dict, validate_async_stream, validate_stream
+
+    @monk
+    class TypeErrorModel:
+        target: Annotated[Literal["a"], Email] | int
+
+    assert validate(TypeErrorModel(target=1)).target == 1
+
+    @monk
+    class BranchValModel:
+        target: Annotated[list[str], Each(LowerCase)] | int
+
+    with pytest.raises(ValidationError) as exc:
+        validate(BranchValModel(target=["A"]))
+    assert exc.value.errors[0]["code"] == "Predicate"
+
+    @monk
+    class MultiErrorModel:
+        target: Annotated[str, Len(min_len=5)] | Annotated[str, LowerCase]
+
+    with pytest.raises(ValidationError) as exc2:
+        validate(MultiErrorModel(target="A"))
+    assert "Must satisfy at least one" in exc2.value.errors[0]["message"]
+
+    settings.type_metadata = {
+        InnerWrap: [NotNull],
+        ArgWrap: [NotNull],
+        types.UnionType: [NotNull],
+        Union: [NotNull],
+    }
+
+    @monk
+    class MetaModel:  # pyright: ignore[reportUnusedClass]
+        inner: OuterWrap[InnerWrap[str]]  # Hits 124
+        arg: str | ArgWrap[int]  # Hits 163
+        union_extra: str | int  # Hits 203-209
+
+    settings.type_metadata = {}  # Cleanup
+
+    settings.unwrappers = {SomeAlias: lambda x: x.value}
+
+    @monk
+    def arg_func(target: MaybeNone[Annotated[str, Email]]) -> None:
+        pass
+
+    with pytest.raises(ValidationError) as exc3:
+        arg_func(target=SomeAlias(None))  # type: ignore
+    assert exc3.value.errors[0]["code"] == "NotNull"
+
+    @monk
+    def ret_func() -> MaybeNone[Annotated[str, Email]]:
+        return SomeAlias(None)  # type: ignore
+
+    with pytest.raises(ValidationError) as exc4:
+        ret_func()
+    assert exc4.value.errors[0]["code"] == "NotNull"
+
+    class MyDict(TypedDict):
+        target: MaybeNone[Annotated[str, Email]]
+
+    with pytest.raises(ValidationError) as exc5:
+        validate_dict({"target": SomeAlias(None)}, MyDict)
+    assert exc5.value.errors[0]["code"] == "NotNull"
+
+    settings.unwrappers = {}  # Cleanup
+
+    async def run_async_test() -> None:
+        async def my_stream() -> AsyncIterator[str]:
+            yield "a"
+            yield "B"
+
+        gen = validate_async_stream(my_stream(), LowerCase)
+        assert await anext(gen) == "a"
+
+        with pytest.raises(ValidationError) as exc6:
+            await anext(gen)
+        assert exc6.value.errors[0]["code"] == "Predicate"
+        assert exc6.value.errors[0]["field"] == "[1]"
+
+    anyio.run(run_async_test)
+
+    gen7 = validate_stream([["A"]], Each(LowerCase))
+    with pytest.raises(ValidationError) as exc7:
+        next(gen7)
+    assert exc7.value.errors[0]["code"] == "Predicate"

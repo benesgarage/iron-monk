@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0]
+
+### Added
+- **Framework Type Metadata:** Added `settings.type_metadata` to configure the compile-time schema globally. You can now seamlessly map custom generic classes (like `strawberry.Maybe`) to a set of predefined constraints (like `[Nullable]`).
+- **Two-Phase Nullability:** We now distinguish between omitted fields (outer nullability) and explicitly wrapped nulls (inner nullability, e.g., `Some(None)`).
+- **Generic Wrapper Peeling:** Fixed unions within generic wrappers, allowing deeply nested unions to route successfully.
+
 ## [0.20.0]
 
 ### Added

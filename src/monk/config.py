@@ -9,6 +9,7 @@ class MonkSettings:
     default_allow_none: bool = False
     ignored_sentinels: tuple[Any, ...] = ()
     unwrappers: dict[Any, Callable[[Any], Any]] = {}
+    type_metadata: dict[Any, list[Any]] = {}
 
     def unwrap(self, val: Any) -> Any:
         if not self.unwrappers:

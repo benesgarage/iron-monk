@@ -217,3 +217,57 @@ def test_strawberry_one_of_input() -> None:
     assert "exactly one" in str(res2.errors[0].message)
 
     settings.ignored_sentinels = ()  # Cleanup
+
+
+def test_strawberry_comprehensive_maybe_patch() -> None:
+    """Thoroughly tests the interaction of UNSET sentinels, Some wrappers, Nullability, and specific error bubbling."""
+    import strawberry
+    from monk import settings
+    from monk.constraints import Each, LowerCase, Nullable
+
+    settings.type_metadata = {strawberry.Maybe: [Nullable]}
+
+    @monk
+    @strawberry.input
+    class ComprehensivePatchInput:
+        email: strawberry.Maybe[Annotated[str, Email]]
+        bio: strawberry.Maybe[Annotated[str, Trimmed] | None]
+        tags: strawberry.Maybe[Annotated[list[str], Each(LowerCase)]]
+
+    @strawberry.type
+    class Query:
+        @strawberry.field
+        def patch_profile(self, input: ComprehensivePatchInput) -> str:
+            validate(input)
+            return "SUCCESS"
+
+    schema = strawberry.Schema(query=Query)
+
+    # 1. All omitted (Safely bypasses all constraints)
+    res1 = schema.execute_sync("query { patchProfile(input: {}) }")
+    assert res1.errors is None
+
+    # 2. Valid Email (Successfully unwraps Some and checks Email)
+    res2 = schema.execute_sync('query { patchProfile(input: {email: "kai@monk.com"}) }')
+    assert res2.errors is None
+
+    # 3. Nullable Maybe explicitly set to null (Bypasses Trimmed constraint natively)
+    res3 = schema.execute_sync("query { patchProfile(input: {bio: null}) }")
+    assert res3.errors is None
+
+    # 4. Invalid Email (Bubbles specific 'Email' error instead of generic Union error)
+    res4 = schema.execute_sync('query { patchProfile(input: {email: "bad-email"}) }')
+    assert res4.errors is not None
+    assert "email" in str(res4.errors[0].original_error)
+
+    # 5. Invalid Bio (Bubbles specific 'Trimmed' error)
+    res5 = schema.execute_sync('query { patchProfile(input: {bio: " untrimmed "}) }')
+    assert res5.errors is not None
+    assert "whitespace" in str(res5.errors[0].original_error)
+
+    # 6. Invalid Tags List (Recursively bubbles the 'LowerCase' error inside the list index!)
+    res6 = schema.execute_sync('query { patchProfile(input: {tags: ["valid", "INVALID"]}) }')
+    assert res6.errors is not None
+    assert "islower" in str(res6.errors[0].original_error)
+
+    settings.type_metadata = {}
