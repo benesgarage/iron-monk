@@ -17,6 +17,18 @@ from .types import ErrorDict
 from .config import settings
 
 
+class Ref:
+    """A marker used to reference another field dynamically."""
+
+    __slots__ = ("field_name",)
+
+    def __init__(self, field_name: str):
+        self.field_name = field_name
+
+    def __repr__(self) -> str:
+        return f"Ref('{self.field_name}')"
+
+
 @constraint
 class Predicate:
     """Validates that a value satisfies a given boolean-returning function."""
@@ -163,14 +175,27 @@ class NotNull:
         pass
 
 
+@constraint
+class Eq:
+    """Validates that a value is strictly equal to another value or Ref."""
+
+    value: Any
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if value != self.value:
+            raise ValueError(f"Must be equal to {self.value}.")
+
+
 @constraint(kw_only=True)
 class Interval:
     """Numeric or Comparable Interval bounds"""
 
-    gt: SupportsGt | None = None
-    ge: SupportsGe | None = None
-    lt: SupportsLt | None = None
-    le: SupportsLe | None = None
+    gt: SupportsGt | Ref | None = None
+    ge: SupportsGe | Ref | None = None
+    lt: SupportsLt | Ref | None = None
+    le: SupportsLe | Ref | None = None
     message: str | None = None
     code: str | None = None
 
@@ -210,16 +235,17 @@ IsUTC = Predicate(_is_utc)
 
 @constraint
 class Len:
-    min_len: Annotated[int, NonNegative] = 0
-    max_len: Annotated[int | None, NonNegative] = None
+    min_len: Annotated[int, NonNegative] | Ref = 0
+    max_len: Annotated[int | None, NonNegative] | Ref = None
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        NonNegative.validate(self.min_len)
-        if self.max_len is not None:
+        if not isinstance(self.min_len, Ref):
+            NonNegative.validate(self.min_len)
+        if self.max_len is not None and not isinstance(self.max_len, Ref):
             NonNegative.validate(self.max_len)
-            if self.min_len > self.max_len:
+            if not isinstance(self.min_len, Ref) and self.min_len > self.max_len:
                 raise ValueError(f"min_len ({self.min_len}) cannot be greater than max_len ({self.max_len}).")
 
     def validate(self, value: Any) -> None:
@@ -228,23 +254,28 @@ class Len:
         except TypeError:
             raise TypeError(f"Type '{type(value).__name__}' does not support len().")
 
-        if length < self.min_len:
-            raise ValueError(f"Must have a minimum length of {self.min_len}.")
-        if self.max_len is not None and length > self.max_len:
-            raise ValueError(f"Must have a maximum length of {self.max_len}.")
+        min_len = cast(int, self.min_len)
+        max_len = cast(int | None, self.max_len)
+
+        if length < min_len:
+            raise ValueError(f"Must have a minimum length of {min_len}.")
+        if max_len is not None and length > max_len:
+            raise ValueError(f"Must have a maximum length of {max_len}.")
 
 
 @constraint
 class MultipleOf:
-    multiple_of: SupportsMod
+    multiple_of: SupportsMod | Ref
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        if self.multiple_of == 0:
+        if not isinstance(self.multiple_of, Ref) and self.multiple_of == 0:
             raise ValueError("multiple_of cannot be 0.")
 
     def validate(self, value: Any) -> None:
+        if self.multiple_of == 0:
+            raise ValueError("multiple_of cannot be 0.")
         try:
             if value % self.multiple_of != 0:
                 raise ValueError(f"Must be a multiple of {self.multiple_of}.")
@@ -277,20 +308,23 @@ class Match:
 class OneOf:
     """Validates that a value is an exact member of a predefined set of choices."""
 
-    choices: Iterable[Any]
+    choices: Iterable[Any] | Ref
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        # Always convert to tuple so the constraint is immutable and hashable (for tyro/FastAPI caching)
-        object.__setattr__(self, "choices", tuple(self.choices))
-
-        if not self.choices:
-            raise ValueError("OneOf requires at least one choice.")
+        if not isinstance(self.choices, Ref):
+            # Always convert to tuple so the constraint is immutable and hashable (for tyro/FastAPI caching)
+            object.__setattr__(self, "choices", tuple(self.choices))
+            if not self.choices:
+                raise ValueError("OneOf requires at least one choice.")
 
     def validate(self, value: Any) -> None:
-        if value not in self.choices:
-            allowed = ", ".join(repr(c) for c in self.choices)
+        choices = cast(Iterable[Any], self.choices)
+        if not choices:
+            raise ValueError("OneOf requires at least one choice.")
+        if value not in choices:
+            allowed = ", ".join(repr(c) for c in choices)
             raise ValueError(f"Must be one of: [{allowed}], got {repr(value)}.")
 
 
@@ -491,7 +525,7 @@ class Email:
 
 @constraint
 class StartsWith:
-    prefix: str
+    prefix: str | Ref
     message: str | None = None
     code: str | None = None
 
@@ -505,7 +539,7 @@ class StartsWith:
 
 @constraint
 class EndsWith:
-    suffix: str
+    suffix: str | Ref
     message: str | None = None
     code: str | None = None
 
@@ -681,18 +715,24 @@ class JSON:
 class ContainsKeys:
     """Validates that a dictionary contains all the specified keys."""
 
-    keys: Iterable[Any]
+    keys: Iterable[Any] | Ref
     _required_keys: frozenset[Any] = field(init=False, repr=False, compare=False)
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "_required_keys", frozenset(self.keys))
+        if not isinstance(self.keys, Ref):
+            object.__setattr__(self, "_required_keys", frozenset(self.keys))
 
     def validate(self, value: Any) -> None:
         if not isinstance(value, dict):
             raise TypeError(f"Type '{type(value).__name__}' is not a dictionary.")
-        missing = self._required_keys - value.keys()
+
+        req_keys = getattr(self, "_required_keys", None)
+        if req_keys is None:
+            req_keys = frozenset(cast(Iterable[Any], self.keys))
+
+        missing = req_keys - value.keys()
         if missing:
             missing_str = ", ".join(repr(k) for k in missing)
             raise ValueError(f"Dictionary is missing required keys: {missing_str}")
@@ -702,21 +742,27 @@ class ContainsKeys:
 class Subset:
     """Validates that all elements in a collection are within a predefined set of choices."""
 
-    choices: Iterable[Any]
+    choices: Iterable[Any] | Ref
     _allowed: frozenset[Any] = field(init=False, repr=False, compare=False)
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "_allowed", frozenset(self.choices))
+        if not isinstance(self.choices, Ref):
+            object.__setattr__(self, "_allowed", frozenset(self.choices))
 
     def validate(self, value: Any) -> None:
         if isinstance(value, Iterator):
             raise TypeError(
                 f"Cannot eagerly validate exhaustible iterator '{type(value).__name__}'. Use 'validate_stream()' for lazy validation, or convert to a list/tuple first."
             )
+
+        allowed = getattr(self, "_allowed", None)
+        if allowed is None:
+            allowed = frozenset(cast(Iterable[Any], self.choices))
+
         try:
-            if not set(value).issubset(self._allowed):
+            if not set(value).issubset(allowed):
                 raise ValueError("Contains unallowed items.")
         except TypeError:
             raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
@@ -726,12 +772,13 @@ class Subset:
 class ExactLen:
     """Validates that a sized collection or string is exactly a specific length."""
 
-    length: Annotated[int, NonNegative]
+    length: Annotated[int, NonNegative] | Ref
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        NonNegative.validate(self.length)
+        if not isinstance(self.length, Ref):
+            NonNegative.validate(self.length)
 
     def validate(self, value: Any) -> None:
         try:
@@ -883,8 +930,15 @@ class MacAddress:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a MAC address.")
 
 
+@constraint
 class CSV:
     """Validates a delimited string and applies constraints to each extracted element."""
+
+    separator: str = field(default=",", init=False)
+    unique: bool = field(default=False, init=False)
+    message: str | None = field(default=None, init=False)
+    code: str | None = field(default=None, init=False)
+    _prepared: list[MonkConstraint] = field(init=False, repr=False, compare=False)
 
     def __init__(
         self,
@@ -894,12 +948,12 @@ class CSV:
         message: str | None = None,
         code: str | None = None,
     ) -> None:
-        self.separator = separator
-        self.unique = unique
-        self.message = message
-        self.code = code
+        object.__setattr__(self, "separator", separator)
+        object.__setattr__(self, "unique", unique)
+        object.__setattr__(self, "message", message)
+        object.__setattr__(self, "code", code)
         # Safely instantiate any uninstantiated classes (e.g., LowerCase vs LowerCase())
-        self._prepared = [c() if isinstance(c, type) else c for c in constraints]
+        object.__setattr__(self, "_prepared", [c() if isinstance(c, type) else c for c in constraints])
 
     def validate(self, value: Any) -> None:
         if not isinstance(value, str):

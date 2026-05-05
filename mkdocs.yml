@@ -43,6 +43,7 @@ nav:
       - Overview: advanced.md
       - Dicts, Streams, & Execution: advanced/execution.md
       - Cross-Field Validation: advanced/cross_field.md
+      - Asymmetric Validation: advanced/asymmetric_validation.md
       - Logical Composability: advanced/logical.md
       - Custom Constraints & Errors: advanced/customization.md
       - Framework Integration: advanced/framework_integration.md

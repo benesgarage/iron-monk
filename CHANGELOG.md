@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0]
+
+### Added
+- **Asymmetric Validation:** Introduced declarative cross-field validation via the new `Ref` keyword. You can now define dynamic constraints that evaluate against sibling fields at runtime (e.g., `Annotated[int, Interval(gt=Ref("min_val"))]`).
+- **AST Blueprint Compiler:** Developed a constraint cloning engine that resolves and injects `Ref` values into constraints while preserving `__slots__` memory optimizations and strict thread safety.
+- **Ref-Aware Constraints:** Upgraded `Eq`, `Interval`, `Len`, `ExactLen`, `MultipleOf`, `StartsWith`, `EndsWith`, `Contains`, `OneOf`, `Subset`, `ContainsKeys`, `CSV`, `DictOf`, `AnyOf`, `AllOf`, and `Not` to natively support `Ref` arguments out of the box.
+
 ## [0.22.0]
 
 ### Removed
