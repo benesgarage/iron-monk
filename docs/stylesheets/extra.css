@@ -1,0 +1,410 @@
+/* ========================================================================
+   iron-monk — custom theme
+   Palette derived from the logo: deep navy, saffron/copper, soft warm white.
+   Dialed up: cleaner whites, punchier saffron, brighter dark mode.
+   ======================================================================== */
+
+/* ----- Light mode ----- */
+[data-md-color-scheme="default"] {
+    --md-primary-fg-color:        #131a36;   /* deep navy header */
+    --md-primary-fg-color--light: #232c52;
+    --md-primary-fg-color--dark:  #0a0f24;
+    --md-primary-bg-color:        #ffffff;
+    --md-primary-bg-color--light: #ffffff;
+
+    --md-accent-fg-color:         #e8551b;   /* saffron, dialed up */
+    --md-accent-fg-color--transparent: rgba(232, 85, 27, 0.10);
+
+    --md-default-bg-color:        #fdfcf9;   /* near-white with a whisper of warmth */
+    --md-default-fg-color:        #15182a;
+    --md-default-fg-color--light: #4a4d63;
+    --md-default-fg-color--lighter: #8e92a8;
+
+    --md-typeset-a-color:         #e8551b;
+
+    --md-code-bg-color:           #f4efe4;   /* warm code panel */
+    --md-code-fg-color:           #1f2440;
+    --md-code-hl-color:           rgba(232, 85, 27, 0.18);
+
+    --md-typeset-table-color:     #e3dccb;
+
+    --im-accent-soft:             #fce7d8;
+    --im-accent-strong:           #c7421a;
+    --im-rule-color:              #e8551b;
+}
+
+/* ----- Dark mode ----- */
+[data-md-color-scheme="slate"] {
+    --md-primary-fg-color:        #0a0f24;   /* deepest navy header */
+    --md-primary-fg-color--light: #182040;
+    --md-primary-fg-color--dark:  #050818;
+    --md-primary-bg-color:        #f4efe4;
+    --md-primary-bg-color--light: #f4efe4;
+
+    --md-accent-fg-color:         #ff9456;   /* warm saffron pop */
+    --md-accent-fg-color--transparent: rgba(255, 148, 86, 0.16);
+
+    --md-default-bg-color:        #0f1530;
+    --md-default-fg-color:        #ece5d3;
+    --md-default-fg-color--light: #b8b1a0;
+    --md-default-fg-color--lighter: #6e6a5e;
+
+    --md-typeset-a-color:         #ff9456;
+
+    --md-code-bg-color:           #18204a;
+    --md-code-fg-color:           #ece5d3;
+    --md-code-hl-color:           rgba(255, 148, 86, 0.22);
+
+    --md-typeset-table-color:     #2c345e;
+
+    --im-accent-soft:             #2a1f2c;
+    --im-accent-strong:           #ffb088;
+    --im-rule-color:              #ff9456;
+}
+
+/* ========================================================================
+   Typography
+   ======================================================================== */
+
+.md-typeset {
+    font-feature-settings: "kern", "liga", "calt";
+    line-height: 1.65;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--md-default-fg-color);
+}
+
+.md-typeset h1 {
+    font-size: 2.4rem;
+    line-height: 1.1;
+    background: linear-gradient(135deg, var(--md-default-fg-color) 0%, var(--md-accent-fg-color) 140%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.md-typeset h2 {
+    font-size: 1.6rem;
+    margin-top: 2.4em;
+    padding-top: 0.4em;
+}
+
+.md-typeset h3 {
+    font-size: 1.2rem;
+    margin-top: 1.8em;
+    color: var(--im-accent-strong);
+}
+
+.md-typeset h2::before {
+    content: "";
+    display: block;
+    width: 2.4rem;
+    height: 3px;
+    background: var(--im-rule-color);
+    border-radius: 2px;
+    margin-bottom: 0.6em;
+}
+
+/* ========================================================================
+   Inline code
+   ======================================================================== */
+
+.md-typeset code {
+    border-radius: 4px;
+    padding: 0.15em 0.4em;
+    font-size: 0.86em;
+    background: var(--im-accent-soft);
+    color: var(--im-accent-strong);
+    border: none;
+}
+
+[data-md-color-scheme="slate"] .md-typeset code {
+    background: rgba(255, 148, 86, 0.12);
+    color: var(--im-accent-strong);
+}
+
+/* ========================================================================
+   Code blocks
+   ======================================================================== */
+
+.md-typeset pre > code {
+    border: none;
+    padding: 1em 1.2em;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.85em;
+    line-height: 1.65;
+    background: var(--md-code-bg-color);
+    color: var(--md-code-fg-color);
+}
+
+.md-typeset .highlight {
+    border-left: 3px solid var(--md-accent-fg-color);
+    border-radius: 0 6px 6px 0;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .highlight {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* ========================================================================
+   Links
+   ======================================================================== */
+
+.md-typeset a {
+    text-decoration: none;
+    border-bottom: 1px solid var(--md-accent-fg-color--transparent);
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.md-typeset a:hover {
+    border-bottom-color: var(--md-accent-fg-color);
+}
+
+/* ========================================================================
+   Tables
+   ======================================================================== */
+
+.md-typeset table:not([class]) {
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--md-typeset-table-color);
+    box-shadow: none;
+}
+
+.md-typeset table:not([class]) th {
+    background: var(--md-primary-fg-color);
+    color: #ffe8d8;
+    font-weight: 600;
+    border-bottom: 2px solid var(--md-accent-fg-color);
+    letter-spacing: 0.01em;
+}
+
+.md-typeset table:not([class]) td {
+    border-top: 1px solid var(--md-typeset-table-color);
+}
+
+.md-typeset table:not([class]) tr:hover {
+    background: var(--md-accent-fg-color--transparent);
+}
+
+/* ========================================================================
+   Admonitions
+   ======================================================================== */
+
+.md-typeset .admonition,
+.md-typeset details {
+    border-radius: 6px;
+    border-left-width: 3px;
+    box-shadow: none;
+    border-top: 1px solid var(--md-typeset-table-color);
+    border-right: 1px solid var(--md-typeset-table-color);
+    border-bottom: 1px solid var(--md-typeset-table-color);
+}
+
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+    border-left-color: var(--md-accent-fg-color);
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+    font-weight: 600;
+}
+
+/* ========================================================================
+   Header / Tabs
+   ======================================================================== */
+
+.md-header {
+    background: var(--md-primary-fg-color);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.10);
+}
+
+.md-tabs {
+    background: var(--md-primary-fg-color);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.md-tabs__link {
+    opacity: 0.7;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.md-tabs__link:hover {
+    opacity: 1;
+    color: var(--md-accent-fg-color);
+}
+
+.md-tabs__link--active {
+    color: #ffd9c2;
+    opacity: 1;
+    font-weight: 600;
+}
+
+/* Search input */
+.md-search__input {
+    background: rgba(255, 255, 255, 0.10);
+    color: #fff;
+}
+
+.md-search__input::placeholder {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+/* ========================================================================
+   Buttons
+   ======================================================================== */
+
+.md-button {
+    border-radius: 4px;
+    font-weight: 600;
+    letter-spacing: 0.015em;
+    border-width: 1px;
+    transition: all 0.15s ease;
+    padding: 0.55em 1.1em;
+}
+
+.md-button--primary {
+    background: var(--md-accent-fg-color);
+    border-color: var(--md-accent-fg-color);
+    color: #fdfcf9 !important;
+    box-shadow: 0 2px 0 var(--im-accent-strong);
+}
+
+.md-button--primary:hover {
+    background: var(--im-accent-strong);
+    border-color: var(--im-accent-strong);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.15);
+}
+
+.md-button:not(.md-button--primary) {
+    color: var(--md-default-fg-color);
+    border-color: var(--md-default-fg-color--light);
+    background: transparent;
+}
+
+.md-button:not(.md-button--primary):hover {
+    background: var(--md-accent-fg-color--transparent);
+    border-color: var(--md-accent-fg-color);
+    color: var(--md-accent-fg-color);
+}
+
+[data-md-color-scheme="slate"] .md-button:not(.md-button--primary) {
+    color: var(--md-default-fg-color) !important;
+    border-color: var(--md-accent-fg-color);
+}
+
+[data-md-color-scheme="slate"] .md-button:not(.md-button--primary):hover {
+    background: var(--md-accent-fg-color);
+    border-color: var(--md-accent-fg-color);
+    color: #0a0f24 !important;
+}
+
+/* ========================================================================
+   Home page hero
+   ======================================================================== */
+
+.hero {
+    text-align: center;
+    padding: 3.5rem 1rem 2rem;
+}
+
+.hero-logo {
+    width: 180px;
+    height: auto;
+    margin-bottom: 1.5rem;
+    filter: drop-shadow(0 8px 24px rgba(232, 85, 27, 0.20));
+}
+
+.hero h1 {
+    font-size: 3.6rem !important;
+    margin: 0 0 0.4em !important;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    background: linear-gradient(120deg, var(--md-default-fg-color) 0%, var(--md-accent-fg-color) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hero h1::before {
+    display: none;
+}
+
+.hero p {
+    font-size: 1.18rem;
+    max-width: 38rem;
+    margin: 0 auto 0.8em;
+    color: var(--md-default-fg-color--light);
+    line-height: 1.55;
+}
+
+.hero p strong {
+    color: var(--md-default-fg-color);
+}
+
+.hero .md-button {
+    margin: 0.6rem 0.3rem 0;
+}
+
+/* ========================================================================
+   Grid cards (home page features)
+   ======================================================================== */
+
+.md-typeset .grid.cards > ul > li {
+    border-radius: 8px;
+    border: 1px solid var(--md-typeset-table-color);
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    background: var(--md-default-bg-color);
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+    border-color: var(--md-accent-fg-color);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(232, 85, 27, 0.10);
+}
+
+.md-typeset .grid.cards > ul > li > p:first-child {
+    color: var(--md-accent-fg-color);
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* ========================================================================
+   Footer
+   ======================================================================== */
+
+.md-footer {
+    background: var(--md-primary-fg-color--dark);
+}
+
+.md-footer-meta {
+    background: var(--md-primary-fg-color--dark);
+}
+
+/* ========================================================================
+   Sidebar nav (Material)
+   ======================================================================== */
+
+.md-nav__link--active,
+.md-nav__link:focus,
+.md-nav__link:hover {
+    color: var(--md-accent-fg-color);
+}
+
+.md-nav__title {
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}

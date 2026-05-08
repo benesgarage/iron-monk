@@ -1,14 +1,14 @@
 # Strawberry GraphQL
 
-> https://github.com/strawberry-graphql/strawberry
+Strawberry GraphQL is a natural fit for `iron-monk`. The deferred validation model lets Strawberry instantiate input objects without crashing the engine, and you can map the resulting `ValidationError` straight to a strictly-typed Union ("errors as data").
 
-`iron-monk` pairs beautifully with Strawberry GraphQL. It solves the "GraphQL Error" problem by allowing you to parse inputs and return strictly-typed Union errors ("Errors as Data").
+Project: <https://github.com/strawberry-graphql/strawberry>
 
-## 1. Deferred Validation (Inputs)
+## 1. Deferred validation (inputs)
 
-Because `iron-monk` defers validation, Strawberry can safely instantiate input objects without crashing the GraphQL engine. You explicitly validate them inside your resolver and map the errors to your schema.
+Because `iron-monk` defers validation by default, Strawberry safely instantiates inputs without crashing. Validate them inside your resolver and map errors to your schema.
 
-### Step 1: Define your Types
+### Define your types
 ```python
 from typing import Annotated, Self
 
@@ -51,7 +51,7 @@ class BadRequest:
         )
 ```
 
-### Step 2: The Resolver
+### The resolver
 
 ```python
 import strawberry
@@ -73,7 +73,8 @@ class Mutation:
 ```
 
 ### Output
-#### Request
+
+**Request:**
 ```graphql
 mutation {
     registerUser(input: { email: "bad", password: "123" }) {
@@ -86,7 +87,7 @@ mutation {
 }
 ```
 
-#### Response
+**Response:**
 ```json
 {
   "data": {
@@ -101,9 +102,9 @@ mutation {
   }
 }
 ```
-## 2. Fail-Fast Validation (Context & Headers)
+## 2. Fail-fast validation (context & headers)
 
-For authentication headers or IP whitelisting, you may want the request to crash before it reaches the resolver. Use defer=False to reject bad requests instantly during Context creation.
+For authentication headers or IP whitelisting, you want the request to fail before it ever reaches a resolver. Use `defer=False` so context creation rejects bad requests instantly.
 
 ```python
 import strawberry
@@ -117,26 +118,26 @@ class AppContext:
     client_ip: Annotated[str, IPAddress]
 
 def get_context(request_headers: dict, client_ip: str) -> AppContext:
-    # ❌ Fails instantly if headers or IP are invalid
+    # Fails instantly if headers or IP are invalid
     return AppContext(
-        authorization=request_headers.get("Authorization", ""), 
-        client_ip=client_ip
+        authorization=request_headers.get("Authorization", ""),
+        client_ip=client_ip,
     )
 
 @strawberry.type
 class Query:
     @strawberry.field
     def secure_data(self, info: strawberry.Info) -> str:
-        # ✅ Guaranteed 100% safe by the time it reaches the resolver
+        # By the time we get here, context is fully validated.
         context: AppContext = info.context
-        return f"Secret data accessed securely by IP: {context.client_ip}"
+        return f"Secret data accessed by IP: {context.client_ip}"
 ```
 
-## 3. Custom GraphQL Scalars (Schema-Level Validation)
+## 3. Custom GraphQL scalars
 
-GraphQL has very few built-in scalar types (`Int`, `String`, etc.). If you want a `HexColor` or `Cron` type in your GraphQL schema, you usually have to write a custom scalar with parsing logic.
+GraphQL ships with a small handful of built-in scalars (`Int`, `String`, etc.). To add `HexColor` or `Cron` to your schema, you usually write a custom scalar with parse logic.
 
-Because `iron-monk` constraints are standalone, callable Python classes, they can be dropped into Strawberry's `parse_value` hooks. You can build custom scalars in 3 lines of code:
+`iron-monk` constraints are standalone callables, so they drop into Strawberry's `parse_value` hook directly:
 
 ```python
 import strawberry
@@ -179,11 +180,11 @@ schema = strawberry.Schema(
 )
 ```
 
-## 4. Defensive Egress Wrappers
+## 4. Defensive egress wrappers
 
-GraphQL APIs often wrap legacy databases or messy 3rd-party REST APIs. If the legacy REST API returns `"website": "not-a-url"`, Strawberry will happily serve that rubbish to your frontend, potentially breaking the UI.
+GraphQL APIs often front legacy databases or third-party REST APIs. If the upstream returns `"website": "not-a-url"`, Strawberry will happily serve that to your frontend and break the UI.
 
-Use `validate_dict` with `drop_extra_keys=True` inside the resolver to sanitize and validate the external data *before* it reaches the GraphQL engine.
+Use `validate_dict(..., drop_extra_keys=True)` inside the resolver to sanitize external data *before* it reaches the GraphQL engine:
 
 ```python
 import strawberry
@@ -221,13 +222,14 @@ class Query:
         return User(**safe_data)
 ```
 
-## 5. Resolver Argument Validation (Pagination & Filtering)
+## 5. Resolver argument validation
 
-Queries often take arguments (like `limit`, `offset`, or `search`). Validating that `limit` is between 1 and 100 inside the resolver usually requires boilerplate `if limit < 1: raise Exception()` code.
+Queries often take arguments like `limit`, `offset`, or `search`. Validating that `limit` is between 1 and 100 usually means boilerplate `if limit < 1: raise Exception(...)` inside every resolver.
 
-The `@monk` decorator natively decorates standard Python functions. You can stack it directly on top of your Strawberry resolvers!
+`@monk` decorates regular Python functions, so it stacks directly on top of Strawberry resolvers.
 
-> 💡 Tip: This is a form of fail-fast validation. If you'd like to handle errors as data, consider using input objects to validate the data within the resolver.
+!!! note
+    This is fail-fast validation. If you prefer errors-as-data, route arguments through an input object and validate that inside the resolver.
 
 ```python
 import strawberry
@@ -251,9 +253,9 @@ class Query:
         return db_results[offset : offset + limit]
 ```
 
-## 6. Safely Unwrapping Strawberry's Maybe
+## 6. Unwrapping Strawberry's `Maybe`
 
-When building `PATCH` mutations, Strawberry wraps provided values in a `Some` object. Teach `iron-monk` how to globally extract the inner value for validation without mutating the original wrapper.
+When building `PATCH` mutations, Strawberry wraps provided values in a `Some` object. Teach `iron-monk` how to extract the inner value for validation, while leaving the wrapper itself untouched on the model. See **[Settings & Type Metadata](../advanced/settings.md)** for the broader pattern.
 
 ```python
 import strawberry
@@ -262,7 +264,7 @@ from typing import Annotated
 from monk import monk, validate, settings
 from monk.constraints import Email
 
-# 1. Teach iron-monk how to extract the value
+# Teach iron-monk how to extract the value
 settings.unwrappers = {Some: lambda x: x.value}
 
 @strawberry.input

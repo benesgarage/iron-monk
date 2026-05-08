@@ -1,10 +1,10 @@
 # Starlette (ASGI)
 
-> https://github.com/Kludex/starlette
+Starlette gives you explicit control over the request lifecycle, which makes it a clean fit for `iron-monk`. Pair a global exception handler that emits RFC 7807 problem-detail responses with one of two validation patterns: high-throughput raw-dict mode or a DTO bridge decorator.
 
-Starlette requires explicit payload handling. Pair `iron-monk` with Starlette's global exception handlers for automated RFC 7807 error responses. Then, validate incoming requests using high-throughput dictionaries or clean DTO decorators.
+Project: <https://github.com/Kludex/starlette>
 
-## The Integration
+## The integration
 ```python
 import functools
 from typing import Annotated, TypedDict
@@ -64,7 +64,7 @@ app = Starlette(
 )
 ```
 
-### Output
+## Output
 ```bash
 $ curl -X POST http://localhost:8000/users/dict \
   -H 'Content-Type: application/json' \

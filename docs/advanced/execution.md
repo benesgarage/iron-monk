@@ -1,25 +1,12 @@
-# Dicts, Streams, & Execution
+# Execution Models
 
-## Raw Dictionary Validation
+`iron-monk` exposes three validation entry points. The basics are covered in **[Core Concepts → Validation](../concepts.md#3-validation)**; this page documents the flags, edge cases, and recursion patterns power users hit in production.
 
-Validate raw dictionaries directly against a schema using `validate_dict`. This skips object allocation for maximum performance.
+---
 
-```python
-from typing import Annotated
-from monk import validate_dict
-from monk.constraints import Email, Interval
+## `validate_dict` — Strict Mode and Sanitization
 
-class UserDict:
-    email: Annotated[str, Email]
-    age: Annotated[int, Interval(ge=18)]
-    
-# Validate instantly without creating an object
-safe_dict = validate_dict({"email": "test@domain.com", "age": 25}, UserDict)
-```
-
-### Strict Mode & Sanitization
-`validate_dict` is strict by default. Unrecognized keys instantly raise a `ValidationError`.
-To securely sanitize dirty payloads, pass `drop_extra_keys=True`. It drops unknown fields and returns a clean dictionary.
+By default, `validate_dict` is **strict**: any key in the payload that is not in the schema raises a `ValidationError`. Pass `drop_extra_keys=True` to silently strip them and return a sanitized dict.
 
 ```python
 from typing import TypedDict
@@ -30,20 +17,18 @@ class UserDict(TypedDict):
 
 payload = {"name": "John", "is_admin": True}
 
-# ❌ Fails strict mode!
-# validate_dict(payload, UserDict) 
-
-# ✅ Returns sanitized dict: {"name": "John"}
-safe_data = validate_dict(payload, UserDict, drop_extra_keys=True)
+# validate_dict(payload, UserDict)            # raises — "is_admin" rejected
+clean = validate_dict(payload, UserDict, drop_extra_keys=True)
+# {"name": "John"}
 ```
 
-## Partial Validation (PATCH Requests)
+Use `drop_extra_keys=True` at the trust boundary (HTTP handlers, queue consumers) to defang attacker-controlled payloads before they reach your domain layer.
 
-Pass `partial=True` to ignore missing keys while still validating the keys that are present.
+---
 
-### Schema Composition
+## `validate_dict` — Partial Validation (PATCH)
 
-Use standard class inheritance to keep your rules DRY when building separate schemas for creation vs. partial updates.
+For PATCH-style endpoints where the client sends only the fields they want to change, pass `partial=True`. Missing keys are skipped; present keys are validated as usual.
 
 ```python
 from typing import Annotated
@@ -53,57 +38,73 @@ from monk.constraints import Email, Interval, Len
 class UserBase:
     age: Annotated[int, Interval(ge=18)]
 
-# PATCH Schema (Inherits 'age', adds relaxed 'username', omits 'email')
 class UserUpdate(UserBase):
     username: Annotated[str, Len(min_len=5)]
 
-safe_patch = validate_dict({"username": "admin"}, UserUpdate, partial=True)
+validate_dict({"username": "admin"}, UserUpdate, partial=True)
 ```
 
-> ⚡ Explicit Nulls: `partial=True` only ignores completely omitted keys. If a client explicitly sends `{"username": None}`, it will still fail the `NotNull` check.
+**Partial does not relax NotNull.** `partial=True` only ignores *omitted* keys. A client that explicitly sends `{"username": None}` still fails the `NotNull` check — explicit nulls remain semantically distinct from missing fields.
 
-## Direct Execution (Standalone Variables)
+Use ordinary class inheritance (`UserUpdate(UserBase)`) to keep PATCH schemas DRY against creation schemas.
 
-Execute constraints directly on standalone variables.
+---
 
-> ⚡ Note: Direct execution raises standard ValueError or TypeError, not ValidationError.
-> 
-```python
-from monk.constraints import Email, Interval
+## `validate_stream` — Lazy Iteration
 
-Email().validate("test@domain.com") # ✅ Success
-Interval(ge=18).validate(12)        # ❌ ValueError
-Email().validate(123)               # ❌ TypeError
-```
-
-## Validating Generators and Streams
-
-Collection constraints (`Each`, `Contains`, `Unique`) reject exhaustible iterators to prevent silent data consumption.
-To safely validate infinite streams or generators on the fly, use `validate_stream` (or `validate_async_stream`). Invalid items instantly raise a `ValidationError` before your application processes them.
+Collection constraints (`Each`, `Contains`, `Unique`) refuse to consume exhaustible iterators — they would silently destroy the data they were validating. To validate a stream lazily, use `validate_stream` (or `validate_async_stream`):
 
 ```python
-from typing import Iterator
+from collections.abc import Iterator
 from monk import validate_stream
 from monk.constraints import Email
 
-def process_data(stream: Iterator[str]):
-    safe_stream = validate_stream(stream, Email)
-    for item in safe_stream:
-        print(item)
+def process(stream: Iterator[str]) -> None:
+    for email in validate_stream(stream, Email):
+        send(email)
 
-process_data((x for x in ["test@domain.com", "bad"]))
-# Yields: test@domain.com
-# ❌ Raises ValidationError on the second item!
+process(x for x in ["test@domain.com", "bad"])
+# yields "test@domain.com", then raises ValidationError on "bad"
 ```
 
-## Deeply Nested Dictionaries
+The async sibling has the same shape:
 
-Use the `Nested` constraint to recursively validate complex JSON architectures without instantiating objects.
+```python
+from monk import validate_async_stream
+
+async def process(stream):
+    async for email in validate_async_stream(stream, Email):
+        await send(email)
+```
+
+Each item is validated as it is pulled — no buffering, no peeking ahead. Failures interrupt iteration immediately.
+
+---
+
+## Standalone Execution
+
+Every constraint exposes `.validate(value)`. Calling it directly is the fastest path for one-off checks at function boundaries or in tests:
+
+```python
+from monk.constraints import Email, Interval
+
+Email().validate("test@domain.com")          # passes silently
+Interval(ge=18).validate(12)                 # raises ValueError
+Email().validate(123)                        # raises TypeError
+```
+
+Standalone calls raise native `ValueError` / `TypeError` rather than `ValidationError` — there is no field context to aggregate over. If you need aggregation in tests, build a `@monk` class and call `validate()`.
+
+---
+
+## Nested Schemas
+
+Use `Nested(schema)` to validate raw nested dicts against another `TypedDict` or `@monk` class without instantiating them.
 
 ```python
 from typing import TypedDict, Annotated
 from monk import validate_dict
-from monk.constraints import Email, Len, Each, Nested
+from monk.constraints import Email, Len, Nested
 
 class AddressDict(TypedDict):
     city: Annotated[str, Len(min_len=2)]
@@ -111,20 +112,21 @@ class AddressDict(TypedDict):
 class UserDict(TypedDict):
     email: Annotated[str, Email]
     address: Annotated[AddressDict, Nested(AddressDict)]
-    history: Annotated[list[AddressDict], Each(Nested(AddressDict))]
+    history: list[Annotated[AddressDict, Nested(AddressDict)]]   # auto-synth handles per-element
 ```
+
+`Nested` accepts `partial=True` to propagate PATCH semantics into nested dicts.
+
+---
 
 ## Recursive Schemas
 
-If you are building tree structures (like a file directory or a comment section), a schema might need to contain a `list` of itself. 
+### TypedDict (lazy reference)
 
-### With Raw Dictionaries (TypedDict)
-
-Pass a lazy `lambda` to the `Nested` constraint to validate self-referencing schemas at runtime.
+`TypedDict` cannot reference itself directly. Pass a lambda to `Nested` so resolution happens at validation time:
 
 ```python
 from typing import TypedDict, Annotated
-from monk import validate_dict
 from monk.constraints import Len, Each, Nested
 
 class Comment(TypedDict):
@@ -132,9 +134,9 @@ class Comment(TypedDict):
     replies: Annotated[list["Comment"], Each(Nested(lambda: Comment))]
 ```
 
-### With Dataclasses (@monk)
+### `@monk` Dataclass (string forward reference)
 
-Recursive `@monk` dataclasses work out-of-the-box using standard string forward references. No `Nested` or `lambda` required.
+`@monk` dataclasses handle recursion natively via standard string forward references. No `Nested`, no lambda:
 
 ```python
 from typing import Annotated
@@ -146,5 +148,7 @@ class Node:
     id: Annotated[int, Interval(ge=1)]
     children: list["Node"]
 
-validate(Node(id=1, children=[Node(id=2, children=[])])) 
+validate(Node(id=1, children=[Node(id=2, children=[])]))
 ```
+
+The recursion is bounded by your data, not your annotation — there is no cycle detection. Trust the data shape, or add a depth check in `__monk_validate__`.

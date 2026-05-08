@@ -1,10 +1,10 @@
 # SQLAlchemy 2.0
 
-> https://github.com/sqlalchemy/sqlalchemy
+Validate at the application boundary, then hand only proven data to SQLAlchemy. The DTO pattern below keeps validation rules out of your persistence layer and lets you reuse the same DTO across HTTP, queue, and CLI entry points.
 
-Validate your data at the edge of your application, and only pass proven, safe data to SQLAlchemy.
+Project: <https://github.com/sqlalchemy/sqlalchemy>
 
-## The Integration
+## The integration
 
 ```python
 from typing import Annotated

@@ -7,59 +7,89 @@ theme:
   logo: assets/monk.png
   favicon: assets/monk.png
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.indexes
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.copy
     - navigation.sections
+    - navigation.path
+    - navigation.footer
+    - content.code.annotate
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: black
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: black
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/extra.css
 
 repo_name: benesgarage/iron-monk
 repo_url: https://github.com/benesgarage/iron-monk
+edit_uri: edit/main/docs/
 
 markdown_extensions:
+  - attr_list
+  - md_in_html
+  - admonition
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
-  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 nav:
   - Home: index.md
-  - Core Concepts: core_concepts.md
-  - The Constraint Toolkit: constraints.md
-  - Performance & Benchmarks: benchmarks.md
-  - API Reference: api_reference.md
-  - Advanced Usage:
-      - Overview: advanced.md
-      - Dicts, Streams, & Execution: advanced/execution.md
+  - Getting Started: getting_started.md
+  - Core Concepts: concepts.md
+  - Constraints: constraints.md
+  - Advanced:
+      - advanced/index.md
       - Cross-Field Validation: advanced/cross_field.md
-      - Asymmetric Validation: advanced/asymmetric_validation.md
-      - Logical Composability: advanced/logical.md
-      - Custom Constraints & Errors: advanced/customization.md
-      - Framework Integration: advanced/framework_integration.md
-  - Real-World Examples:
-      - Overview: examples.md
-      - Web & API:
+      - Customization: advanced/customization.md
+      - Execution Models: advanced/execution.md
+      - Settings & Type Metadata: advanced/settings.md
+  - Integrations:
+      - examples/index.md
+      - Web APIs:
         - Strawberry GraphQL: examples/strawberry.md
         - Starlette (ASGI): examples/starlette.md
-      - Config & CLI:
-        - App Configuration: examples/app_config.md
-        - tyro (CLI tool): examples/tyro.md
-      - Typing & Ecosystem:
-        - Beartype: examples/beartype.md
       - Data & ORMs:
         - SQLAlchemy 2.0: examples/sqlalchemy.md
         - Tortoise ORM: examples/tortoise_orm.md
+      - Config & CLI:
+        - App Configuration: examples/app_config.md
+        - tyro (CLI tool): examples/tyro.md
+      - Typing Ecosystem:
+        - Beartype: examples/beartype.md
+  - Reference:
+      - API Reference: api_reference.md
+      - Benchmarks: benchmarks.md
 
 plugins:
   - search
@@ -70,3 +100,12 @@ plugins:
             show_source: false
             show_root_heading: true
             heading_level: 3
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/benesgarage/iron-monk
+      name: iron-monk on GitHub
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/iron-monk/
+      name: iron-monk on PyPI

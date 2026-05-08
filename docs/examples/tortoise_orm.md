@@ -1,11 +1,10 @@
 # Tortoise ORM
 
-> https://github.com/tortoise/tortoise-orm
+Tortoise ORM uses custom metaclasses and tightly controls its initialization. Do not decorate Tortoise models directly with `@monk`. Use the DTO (Data Transfer Object) pattern instead — it gives you a clean boundary between API validation and database persistence.
 
-Tortoise ORM uses custom metaclasses and tightly controls its initialization. Do not decorate Tortoise models directly with `@monk`.
-Instead, use the DTO (Data Transfer Object) pattern to create a strict, clean boundary between your API validation and database persistence layers.
+Project: <https://github.com/tortoise/tortoise-orm>
 
-## The Integration
+## The integration
 
 ```python
 import dataclasses

@@ -1,10 +1,10 @@
-# Beartype
+# beartype
 
-> https://github.com/beartype/beartype
+Stack `iron-monk` with `beartype` to get instant runtime type-checking *and* business-logic validation. `beartype` enforces "Is this an `int`?"; `iron-monk` enforces "Is this `int` between 0 and 100?".
 
-Stack `iron-monk` with `beartype` to combine instant runtime type-checking with comprehensive business logic validation.
+Project: <https://github.com/beartype/beartype>
 
-## The Integration
+## The integration
 
 ```python
 from typing import Annotated
@@ -21,13 +21,13 @@ class User:
     email: Annotated[str, Email]
     age: Annotated[int, Interval(ge=18)]
 
-# 1. Type Checking (Caught instantly by beartype)
+# Type checking — caught by beartype
 try:
     User(email="test@domain.com", age="twenty")
 except BeartypeCallHintParamViolation:
-    print("Type Error Caught!")
+    print("Type error caught.")
 
-# 2. Value Validation (Caught explicitly by iron-monk)
+# Value validation — caught by iron-monk
 try:
     validate(User(email="bad-email", age=12))
 except ValidationError as e:
@@ -35,18 +35,18 @@ except ValidationError as e:
     # ['email: Must be a valid email address.', 'age: Must be greater than or equal to 18.']
 ```
 
-### Delegating Nullability
+## Delegating nullability
 
-To let `beartype` exclusively handle required vs. optional fields (`| None`), configure `iron-monk` to allow `None` values globally.
+To let `beartype` exclusively handle required vs. optional fields (`| None`), configure `iron-monk` to allow `None` globally:
 
 ```python
 from monk import settings
 settings.default_allow_none = True
 ```
 
-### The Global Import Hook
+## The global import hook
 
-If using `beartype`'s global import hook, you don't need to stack decorators. `iron-monk` dataclasses are type-checked automatically.
+With `beartype`'s global import hook, you do not need to stack decorators — `iron-monk` dataclasses are type-checked automatically:
 
 ```python
 from beartype.claw import beartype_this_package

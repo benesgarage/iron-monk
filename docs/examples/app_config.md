@@ -1,6 +1,6 @@
-# App Configuration
+# Application Configuration
 
-Pair explicit environment variable extraction with fail-fast validation for a robust, crash-early application boot sequence.
+Pair explicit environment-variable extraction with fail-fast validation. The app crashes loudly on a misconfigured deploy instead of running for hours with bad settings.
 
 ```python
 import os
@@ -34,7 +34,7 @@ except ValidationError as e:
     print("\n".join(e.flatten()))
 ```
 
-### Output
+## Output
 ```bash
 CRITICAL: App failed to boot:
 environment: Must be one of: ['development', 'staging', 'production'], got 'testing'.

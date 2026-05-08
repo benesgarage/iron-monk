@@ -4,7 +4,7 @@
   </a>
   <h1 style="margin-top: 0; padding-top: 0;">iron-monk</h1>
   <h4>Business constraint validation for people who hate data mutation.</h4>
-  <h5><i>The fastest Pure-Python validator. 0.06MB. 0 Dependencies. 100% Type-Safe.</i></h5>
+  <h5><i>The fastest Pure-Python validator. 0 Dependencies. 100% Type-Safe.</i></h5>
 
   <p>
     <a href="https://pypi.org/project/iron-monk/"><img src="https://img.shields.io/pypi/v/iron-monk.svg?color=black" alt="PyPI version"></a>
@@ -43,85 +43,111 @@ poetry add iron-monk
 ```python
 from typing import Annotated
 from monk import monk, validate
-from monk.constraints import Email, Interval
+from monk.constraints import Email, Interval, Len
 
 @monk
 class User:
     # No base class, no magic. Just your data.
     email: Annotated[str, Email]
-    age: Annotated[int, Interval(ge=18)]
+    age:   Annotated[int, Interval(ge=18)]
+    tags:  list[Annotated[str, Len(min_len=2)]]   # auto per-element validation
 
-user = User(email="not-an-email", age=12)
-validate(user)  # Captures BOTH email and age errors; doesn't fail-fast.
+user = User(email="not-an-email", age=12, tags=["a"])
+validate(user)  # Aggregates ALL THREE errors. Never fails fast.
 ```
 
-When validation fails, `iron-monk` aggregates all errors into structured dictionaries.
+When validation fails, `iron-monk` returns every failure in one structured response:
+
 ```python
-from monk import validate
 from monk.exceptions import ValidationError
 
 try:
     validate(user)
 except ValidationError as e:
-    print(e.errors) 
-    # [{'field': 'email', 'message': 'Must be a valid email address.', 'code': 'Email'}, ...]
-    print(e.flatten()) 
-    # ['email: Must be a valid email address.', 'age: Must be greater than or equal to 18.']
+    print(e.errors)
+    # [{'field': 'email', 'message': 'Must be a valid email address.', 'code': 'Email'},
+    #  {'field': 'age',   'message': 'Must be greater than or equal to 18.', 'code': 'Interval'},
+    #  {'field': 'tags[0]', 'message': 'Must have a minimum length of 2.',   'code': 'Len'}]
+
+    print(e.flatten())          # → list[str] for logs
+    print(e.to_rfc7807())       # → RFC 7807 problem-detail dict for HTTP APIs
+```
+
+### Custom constraints in 3 lines
+
+```python
+from monk import constraint
+
+@constraint
+class DivisibleBy:
+    divisor: int
+
+    def validate(self, value: int) -> None:
+        if value % self.divisor != 0:
+            raise ValueError(f"Must be divisible by {self.divisor}.")
 ```
 
 ## The Toolkit
-**Batteries included**. `iron-monk` comes with a comprehensive suite of built-in constraints, handling complex strings that other libraries ignore:
-- 📝 **`CSV`**: Deeply validate comma-separated strings in-place without allocating lists in memory.
-- ☁️ **`Cron`**: Structurally validate standard POSIX and strict AWS EventBridge scheduling strings.
-- 🔒 **`JWT`**: Verify JSON Web Tokens structurally before passing them to heavy cryptography libraries.
-- 📜 **`JSON`**: Ensure a string contains valid, parsable JSON without mutating it into a dictionary.
-- 🔀 **`Not`**: Seamlessly invert the logic of any constraint (e.g., `Not(URL)`).
 
-👉 [**Check out the Constraint Toolkit &rarr;**](https://benesgarage.github.io/iron-monk/constraints/)
+A comprehensive suite of built-in constraints — including the kind of complex strings most libraries punt on:
+
+- **`CSV`** — validate comma-separated strings in place, no list allocation
+- **`Cron`** — POSIX and AWS EventBridge scheduling strings
+- **`JWT`** — structural JWT shape check before passing to a crypto library
+- **`JSON`** — verify a string is parsable JSON without mutating it into a dict
+- **`Not` / `AnyOf` / `AllOf`** — invert and compose any constraint into richer rules
+
+👉 [**Browse the full catalog &rarr;**](https://benesgarage.github.io/iron-monk/constraints/)
 
  ## Performance
  `iron-monk` doesn't compromise on speed.
  
  *Tested on Python 3.13, executing 100,000 simple primitive validations.*
 
-| Metric                    | `iron-monk`<br>*(v0.18.2)* | `msgspec`<br>*(v0.18.6)* | `pydantic`<br>*(v2.10.6)* | `attrs`<br>*(v24.3.0)* | `marshmallow`<br>*(v3.26.1)* |
+| Metric                    | `iron-monk`<br>*(v0.24.0)* | `msgspec`<br>*(v0.21.1)* | `pydantic`<br>*(v2.13.4)* | `attrs`<br>*(v26.1.0)* | `marshmallow`<br>*(v4.3.0)* |
 |---------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
-| **Package Size**          | **`0.06 MB`**              | `0.44 MB`                | `5.91 MB`                 | `0.21 MB`              | `0.17 MB`                    |
-| **Cold Start**            | **`44.77ms`**              | `52.62ms`                | `83.46ms`                 | `55.73ms`              | `56.01ms`                    |
-| **Object (100k)**         | `0.185s`                   | `0.014s`                 | `0.060s`                  | `0.089s`               | N/A                          |
-| **Dict (100k)**           | `0.067s`                   | `0.059s`                 | `0.057s`                  | N/A                    | `0.445s`                     |
-| **Nested Dict (100k)**    | `0.280s`                   | `0.075s`                 | `0.062s`                  | N/A                    | `1.513s`                     |
-| **Invalid Dict (100k)**   | `0.244s`                   | `0.091s`                 | `0.088s`                  | N/A                    | `1.117s`                     |
-| **Sanitized Dict (100k)** | `0.083s`                   | `0.070s`                 | `0.058s`                  | N/A                    | `0.450s`                     |
-| **Partial Dict (100k)**   | **`0.056s`**               | N/A                      | N/A                       | N/A                    | `0.293s`                     |
-| **Function Call (100k)**  | `0.162s`                   | N/A                      | `0.065s`                  | N/A                    | N/A                          |
+| **Package Size**          | **`0.09 MB`**              | `0.44 MB`                | `5.88 MB`                 | `0.21 MB`              | `0.17 MB`                   |
+| **Cold Start**            | **`34.50ms`**              | `38.21ms`                | `65.08ms`                 | `41.06ms`              | `59.39ms`                   |
+| **Object (100k)**         | `0.233s`                   | `0.013s`                 | `0.052s`                  | `0.082s`               | N/A                          |
+| **Dict (100k)**           | `0.087s`                   | `0.057s`                 | `0.049s`                  | N/A                    | `0.426s`                     |
+| **Nested Dict (100k)**    | `0.340s`                   | `0.071s`                 | `0.053s`                  | N/A                    | `1.383s`                     |
+| **Invalid Dict (100k)**   | `0.244s`                   | `0.081s`                 | `0.073s`                  | N/A                    | `1.001s`                     |
+| **Sanitized Dict (100k)** | `0.105s`                   | `0.063s`                 | `0.054s`                  | N/A                    | `0.439s`                     |
+| **Partial Dict (100k)**   | **`0.058s`**               | N/A                      | N/A                       | N/A                    | `0.267s`                     |
+| **Function Call (100k)**  | `0.168s`                   | N/A                      | `0.050s`                  | N/A                    | N/A                          |
 
-**The Takeaway:** While Rust-backed libraries win on raw loop speed, `iron-monk` is the most efficient choice for the modern cloud. With a footprint 100x smaller than `Pydantic` and significantly faster cold starts, it is the best-in-class validator for AWS Lambda, serverless environments, and CI/CD pipelines where install time and memory overhead are the real bottlenecks.
+**The Takeaway:** Rust-backed libraries win on raw loop speed, but `iron-monk` is the most efficient choice for the modern cloud. Faster cold starts, zero dependencies, and the only entry on the board that natively handles `PATCH` updates, payload sanitization, and standalone constraint execution make it the best-in-class validator for AWS Lambda, serverless environments, and CI/CD pipelines where install time and the network round trip are the real bottlenecks.
 
 👉 [**See our benchmarking methodology &rarr;**](https://benesgarage.github.io/iron-monk/benchmarks/)
 
-## Why iron-monk?
-Most validation libraries do too much. They don't just check your data; they change it. iron-monk is different:
+## Why iron-monk
 
-- ❌ **No Coercion**: We won't "helpfully" turn your string "123" into an integer. If it's the wrong format, it's an error. Period.
-- ❌ **No Base Classes**: Stop inheriting from BaseModel. Keep your classes clean and your IDE's autocompletion fast.
-- ❌ **No Compilation**: Pure Python. No gcc or Rust toolchains required. It just works, everywhere.
-- ❌ **No Side Effects**: Validating an object should never mutate its state. We keep your data exactly as you provided it.
+Most validation libraries do too much — they coerce, force you to inherit from a base class, and stop at the first error. `iron-monk` flips all three.
 
-## Real-world examples
-`iron-monk` is designed to drop into any modern Python project. Some notable projects include:
-- 🍓 Strawberry GraphQL: `iron-monk` helps validate `input` objects seamlessly. 
-- ⚡ Starlette (ASGI): HTTP endpoints with simple request validation using `iron-monk`. 
-- 🖥️ tyro (CLI tool): Generate command-line interfaces from dataclasses and validate with `iron-monk`.
+- **Zero coercion**: `"123"` is never silently rewritten to `123`. Wrong format = error.
+- **Zero base classes**: a `@monk` class is a plain `dataclass`. No `BaseModel`, no metaclass.
+- **Zero fail-fast**: every field is checked. Get every error in one shot.
+- **Annotation is the schema**: constraints live inside `typing.Annotated`. No model layer to keep in sync.
 
-👉 [**See `iron-monk` integrate with these projects, and more &rarr;**](https://benesgarage.github.io/iron-monk/examples/)
+## Integrations
 
-## 📚 Documentation
-Ready to go deeper? Explore our guides:
+`iron-monk` drops into any modern Python project. Battle-tested recipes for:
 
-* **[Core Concepts](https://benesgarage.github.io/iron-monk/core_concepts/)**: Understand the validation lifecycle and error extraction.
-* **[Advanced Usage](https://benesgarage.github.io/iron-monk/advanced/)**: Multi-field validation and custom error messages.
-* **[Custom Constraints](https://benesgarage.github.io/iron-monk/advanced/customization/)**: Learn how to build your own reusable constraints in 3 lines of code.
+- **Strawberry GraphQL** — `errors-as-data` for inputs, `Maybe[T]` integration
+- **Starlette (ASGI)** — RFC 7807 exception handlers, dict-mode and DTO-mode handlers
+- **SQLAlchemy 2.0 / Tortoise ORM** — DTO pattern at the API boundary
+- **tyro** — validate dataclass-driven CLIs
+- **beartype** — stack runtime type-checking under business constraints
+- **App configuration** — fail-fast environment-variable validation on boot
+
+👉 [**See the recipes &rarr;**](https://benesgarage.github.io/iron-monk/examples/)
+
+## Feedback
+
+PRs are not currently being accepted (see [CONTRIBUTING.md](./CONTRIBUTING.md)), but bug reports, feature requests, and integration use cases are welcome.
+
+👉 [**Open an issue &rarr;**](https://github.com/benesgarage/iron-monk/issues)
 
 ## License
+
 MIT

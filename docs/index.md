@@ -1,40 +1,77 @@
-<div align="center">
-  <img src="assets/monk.png" width="400" alt="iron-monk logo">
-  <h1>iron-monk</h1>
+---
+hide:
+  - navigation
+  - toc
+---
+
+<div class="hero" markdown>
+
+<img src="assets/monk.png" alt="iron-monk logo" class="hero-logo">
+
+# iron-monk
+
+**Business-constraint validation for people who hate data mutation.**
+
+A pure-Python validator with zero dependencies, zero coercion, and zero base classes. Just a decorator.
+
+[Get Started :material-arrow-right:](getting_started.md){ .md-button .md-button--primary }
+[View on GitHub :material-github:](https://github.com/benesgarage/iron-monk){ .md-button }
+
 </div>
 
-Welcome to the official documentation for **iron-monk**, a minimalist, zero-coercion validation library for Python.
+---
 
-## The Philosophy
-The Python ecosystem is dominated by heavy validation frameworks that do too much.
+## Why iron-monk
 
-To validate a standard API payload, you shouldn't have to install a library that downloads compiled Rust binaries, injects massive metaclasses, slows down server boot times, and adds megabytes of bloat to your Docker containers.
+Most validation libraries do too much. They coerce your data, force you to inherit from a base class, and stop at the first error so you debug payloads one field at a time.
 
-`iron-monk` was built to provide a clean, explicitly-typed alternative:
+`iron-monk` flips all three.
 
-- 🎯 **Do one thing well**: Unlike libraries that parse, coerce, and serialize, we focus on validation.
-- 🪶 **Zero Dependencies:** Pure Python. No compiled binaries or bloated environments.
-- 🛡️ **Zero Coercion**: We don't secretly cast the string "123" into the integer 123.
-- 🤝 **Agnostic to Type Checking:** We enforce *business constraints*, not base Python types.
-- ⏳ **Deferred Validation:** Capture bad data in a guarded state instead of crashing instantly.
-- 🧬 **Zero Inheritance:** No massive base classes polluting your namespace. Just a decorator.
+<div class="grid cards" markdown>
 
-### Validation vs. Type Checking
-We draw a strict line between *Type Checking* ("Does this value match the Python type hint?") and *Value Validation* ("Does this value satisfy my business rules?"). 
+-   :material-shield-lock-outline: **Zero coercion**
 
-`iron-monk` focuses entirely on the latter. By skipping deep runtime type-checking, it operates perfectly as a standalone validator or stacks flawlessly alongside dedicated tools like `beartype` or `typeguard`.
+    `"123"` is never silently rewritten to `123`. If a string is the wrong format, that is an error.
 
-To configure how `iron-monk` handles missing data (nullability), see [Required vs. Optional Fields](core_concepts.md#required-vs-optional-fields).
+-   :material-package-variant: **Zero dependencies**
 
-## Getting Started
+    Pure Python. No compiled binaries, no install-time toolchain, no `pydantic_core` lurking in your container.
 
-```bash
-pip install iron-monk
+-   :material-format-list-bulleted-square: **Aggregate, don't fail-fast**
+
+    Validation collects every error and reports them in a single `ValidationError`. No whack-a-mole.
+
+-   :material-tag-text-outline: **Annotation is the schema**
+
+    Constraints live inside `typing.Annotated`. No `BaseModel`, no `Schema` class, no metaclass.
+
+</div>
+
+---
+
+## A 30-second tour
+
+```python
+from typing import Annotated
+from monk import monk, validate
+from monk.constraints import Email, Interval
+
+@monk
+class User:
+    email: Annotated[str, Email]
+    age:   Annotated[int, Interval(ge=18)]
+
+user = User(email="bad-email", age=12)
+validate(user)
+# ValidationError aggregating BOTH the email and age failures
 ```
 
-Dive into the documentation:
+---
 
-1. [**Core Concepts**](core_concepts.md): The validation lifecycle, error extraction, and nullability.
-2. [**The Constraint Toolkit**](constraints.md): A complete reference of all built-in rules (e.g. `Email`, `Interval`, `Nested`).
-2. [**Advanced Usage**](advanced.md): Raw dictionaries, partial updates (PATCH), lazy streams, and cross-field logic.
-3. [**Real-World Examples**](examples.md): Drop-in integrations for Strawberry GraphQL, Starlette, ORMs, and CLI tools.
+## Where to next
+
+1. **[Getting Started](getting_started.md)** — installation, the validation lifecycle, error handling.
+2. **[Core Concepts](concepts.md)** — the four pillars and the philosophy behind them.
+3. **[Constraints](constraints.md)** — the full catalog of built-in rules.
+4. **[Advanced Usage](advanced/index.md)** — cross-field rules, custom constraints, settings.
+5. **[Integrations](examples/index.md)** — Strawberry, Starlette, SQLAlchemy, Tortoise, tyro, beartype.
