@@ -1,3 +1,4 @@
+import dataclasses
 import functools
 import inspect
 import types
@@ -9,11 +10,11 @@ from typing import (
     AsyncIterable,
     AsyncIterator,
     Iterator,
+    cast,
     get_origin,
     get_args,
     get_type_hints,
     Union,
-    cast,
 )
 from .exceptions import ValidationError
 from .types import ErrorDict
@@ -29,6 +30,41 @@ _UNION_TYPES: tuple[Any, ...] = (Union, types.UnionType)
 _CONTAINER_ORIGINS: tuple[Any, ...] = (list, set, frozenset, tuple, dict)
 
 _USER_CONTAINER_CONSTRAINT_NAMES: frozenset[str] = frozenset(("Each", "DictOf", "_TupleSchema"))
+
+# Module-level fast bindings for hot paths
+_obj_ga = object.__getattribute__
+_obj_sa = object.__setattr__
+
+
+def _make_resolver(instance: Any) -> Callable[[str], Any]:
+    """Builds a sibling-field resolver bound to a specific dataclass instance."""
+
+    def _resolver(target_name: str) -> Any:
+        try:
+            return _obj_ga(instance, target_name)
+        except AttributeError:
+            return None
+
+    return _resolver
+
+
+def _format_constraint_message(c: Any, value: Any, default_msg: str) -> str:
+    """Formats `c.message` with field/value context (matches `@constraint` wrapper).
+
+    Used by hot paths that bypass the wrapper via `_validate_inner` and must
+    apply custom message templates manually when an exception is caught.
+    """
+    custom = getattr(c, "message", None)
+    if custom is None:
+        return default_msg
+    ctx: dict[str, Any] = {"value": value}
+    if dataclasses.is_dataclass(c):
+        for f in dataclasses.fields(c):
+            ctx[f.name] = getattr(c, f.name)
+    try:
+        return cast(str, custom.format(**ctx))
+    except Exception:
+        return cast(str, custom)
 
 
 class _RefBlueprint:
@@ -110,11 +146,12 @@ def _execute_blueprint(
     cloned_constraint = type(constraint).__new__(type(constraint))  # type: ignore[call-overload]
 
     for attr_name in blueprint.clone_attrs:
-        object.__setattr__(cloned_constraint, attr_name, getattr(constraint, attr_name))
+        _obj_sa(cloned_constraint, attr_name, getattr(constraint, attr_name))
 
+    unwrap = settings.unwrap
     for attr_name, ref_obj in blueprint.refs.items():
-        resolved_val = settings.unwrap(get_val(ref_obj.field_name))
-        object.__setattr__(cloned_constraint, attr_name, resolved_val)
+        resolved_val = unwrap(get_val(ref_obj.field_name))
+        _obj_sa(cloned_constraint, attr_name, resolved_val)
 
     for nested_attr, nested_blueprint in blueprint.nested.items():
         if nested_attr == "union_branches":
@@ -128,7 +165,7 @@ def _execute_blueprint(
                     else:
                         new_constraint.append((inner_constraint, None))
                 new_val.append((branch_type, new_constraint))
-            object.__setattr__(cloned_constraint, nested_attr, new_val)
+            _obj_sa(cloned_constraint, nested_attr, new_val)
             continue
 
         val = getattr(cloned_constraint, nested_attr)
@@ -137,16 +174,16 @@ def _execute_blueprint(
                 _execute_blueprint(inner_constraint, inner_blueprint, get_val) if inner_blueprint else inner_constraint
                 for inner_constraint, inner_blueprint in zip(val, nested_blueprint)
             )
-            object.__setattr__(cloned_constraint, nested_attr, new_val_tuple)
+            _obj_sa(cloned_constraint, nested_attr, new_val_tuple)
         elif isinstance(val, list):
             new_val_list = [
                 _execute_blueprint(inner_constraint, inner_blueprint, get_val) if inner_blueprint else inner_constraint
                 for inner_constraint, inner_blueprint in zip(val, nested_blueprint)
             ]
-            object.__setattr__(cloned_constraint, nested_attr, new_val_list)
+            _obj_sa(cloned_constraint, nested_attr, new_val_list)
         else:
             new_val_single = _execute_blueprint(val, nested_blueprint, get_val)
-            object.__setattr__(cloned_constraint, nested_attr, new_val_single)
+            _obj_sa(cloned_constraint, nested_attr, new_val_single)
 
     return cloned_constraint
 
@@ -156,12 +193,15 @@ class _UnionRouter(MonkConstraint):
 
     def __init__(self, union_branches: list[tuple[Any, list[tuple[MonkConstraint, _RefBlueprint | None]]]]) -> None:
         self.union_branches = union_branches
+        self._branch_origins: tuple[Any, ...] = tuple((get_origin(bt) or bt) for bt, _ in union_branches)
         self.code = "Union"
 
     def validate(self, value: Any) -> None:
         errors: list[Exception] = []
-        for branch_type, branch in self.union_branches:
-            origin = get_origin(branch_type) or branch_type
+        origins = self._branch_origins
+        for idx, branch_pair in enumerate(self.union_branches):
+            branch = branch_pair[1]
+            origin = origins[idx]
             if origin is not Any:
                 try:
                     if not isinstance(value, origin):
@@ -174,15 +214,17 @@ class _UnionRouter(MonkConstraint):
 
             branch_passed = True
             for constraint_obj, _ in branch:
+                fn = getattr(constraint_obj, "_validate_inner", None) or constraint_obj.validate
                 try:
-                    constraint_obj.validate(value)
+                    fn(value)
                 except ValidationError as e:
                     errors.append(e)
                     branch_passed = False
                     break
                 except (ValueError, TypeError) as e:
+                    msg = _format_constraint_message(constraint_obj, value, str(e))
                     error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
-                    errors.append(ValidationError([{"field": "", "message": str(e), "code": error_code}]))
+                    errors.append(ValidationError([{"field": "", "message": msg, "code": error_code}]))
                     branch_passed = False
                     break
             if branch_passed:
@@ -586,17 +628,18 @@ def _recurse(val: Any, prefix: str, errors: list[ErrorDict]) -> None:
 
     # Exact type checking is significantly faster than isinstance abstract base class checks
     val_type = type(val)
+    primitives = _PRIMITIVE_TYPES
     if val_type is list or val_type is tuple:
         for i, item in enumerate(val):
-            if type(item) not in _PRIMITIVE_TYPES:
+            if type(item) not in primitives:
                 _recurse(item, f"{prefix}[{i}]", errors)
     elif val_type is dict:
         for key, value in val.items():
-            if type(value) not in _PRIMITIVE_TYPES:
+            if type(value) not in primitives:
                 _recurse(value, f"{prefix}[{repr(key)}]", errors)
     elif val_type is set or val_type is frozenset:  # Cannot be indexed
         for item in val:
-            if type(item) not in _PRIMITIVE_TYPES:
+            if type(item) not in primitives:
                 _recurse(item, prefix, errors)
 
 
@@ -606,21 +649,26 @@ def validate_arguments(
 ) -> None:
     """Validates a dictionary of function arguments against extracted constraints."""
     errors: list[ErrorDict] = []
+    unwrap = settings.unwrap
+    default_allow_none = settings.default_allow_none
+    primitives = _PRIMITIVE_TYPES
+
     for arg_name, raw_value in arguments.items():
         rule_tuple = rules.get(arg_name)
         if rule_tuple:
             constraints, is_outer_nullable, is_inner_nullable, is_not_null, not_null_constraint = rule_tuple
 
             if raw_value is None:
-                if not is_outer_nullable and (is_not_null or not settings.default_allow_none):
+                if not is_outer_nullable and (is_not_null or not default_allow_none):
                     msg = getattr(not_null_constraint, "message", None) or "Field is required and cannot be null."
                     code = getattr(not_null_constraint, "code", None) or "NotNull"
                     errors.append({"field": arg_name, "message": msg, "code": code})
                 continue
 
-            value = settings.unwrap(raw_value)
+            value = unwrap(raw_value)
+
             if value is None:
-                if not is_inner_nullable and (is_not_null or not settings.default_allow_none):
+                if not is_inner_nullable and (is_not_null or not default_allow_none):
                     msg = getattr(not_null_constraint, "message", None) or "Field is required and cannot be null."
                     code = getattr(not_null_constraint, "code", None) or "NotNull"
                     errors.append({"field": arg_name, "message": msg, "code": code})
@@ -629,31 +677,26 @@ def validate_arguments(
             for constraint_obj, blueprint in constraints:
                 if blueprint is not None:
                     constraint_to_validate = _execute_blueprint(constraint_obj, blueprint, arguments.get)
-                    try:
-                        constraint_to_validate.validate(value)
-                    except ValidationError as e:
-                        for error_dict in e.errors:
-                            error_dict["field"] = f"{arg_name}{error_dict.get('field', '')}"
-                            errors.append(error_dict)
-                    except (ValueError, TypeError) as e:
-                        error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
-                        errors.append({"field": arg_name, "message": str(e), "code": error_code})
+                    # Cloned constraints have ephemeral ids — bypass cache to avoid leak.
+                    fn = getattr(constraint_to_validate, "_validate_inner", None) or constraint_to_validate.validate
                 else:
-                    try:
-                        constraint_obj.validate(value)
-                    except ValidationError as e:
-                        for error_dict in e.errors:
-                            error_dict["field"] = f"{arg_name}{error_dict.get('field', '')}"
-                            errors.append(error_dict)
-                    except (ValueError, TypeError) as e:
-                        error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
-                        errors.append({"field": arg_name, "message": str(e), "code": error_code})
+                    fn = getattr(constraint_obj, "_validate_inner", None) or constraint_obj.validate
+                try:
+                    fn(value)
+                except ValidationError as e:
+                    for error_dict in e.errors:
+                        error_dict["field"] = f"{arg_name}{error_dict.get('field', '')}"
+                        errors.append(error_dict)
+                except (ValueError, TypeError) as e:
+                    msg = _format_constraint_message(constraint_obj, value, str(e))
+                    error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
+                    errors.append({"field": arg_name, "message": msg, "code": error_code})
 
-            if type(value) not in _PRIMITIVE_TYPES:
+            if type(value) not in primitives:
                 _recurse(value, arg_name, errors)
         else:
-            value = settings.unwrap(raw_value)
-            if type(value) not in _PRIMITIVE_TYPES:
+            value = unwrap(raw_value)
+            if type(value) not in primitives:
                 _recurse(value, arg_name, errors)
 
     if errors:
@@ -682,15 +725,17 @@ def validate_return(
         else:
             for constraint_obj, _ in constraints:
                 # Returns have no sibling fields, so we safely ignore blueprints.
+                fn = getattr(constraint_obj, "_validate_inner", None) or constraint_obj.validate
                 try:
-                    constraint_obj.validate(value)
+                    fn(value)
                 except ValidationError as e:
                     for error_dict in e.errors:
                         error_dict["field"] = f"return{error_dict.get('field', '')}"
                         errors.append(error_dict)
                 except (ValueError, TypeError) as e:
+                    msg = _format_constraint_message(constraint_obj, value, str(e))
                     error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
-                    errors.append({"field": "return", "message": str(e), "code": error_code})
+                    errors.append({"field": "return", "message": msg, "code": error_code})
 
             if type(value) not in _PRIMITIVE_TYPES:
                 _recurse(value, "return", errors)
@@ -727,6 +772,8 @@ def validate_dict(
     """
     allowed_keys, rules = _get_schema_rules(schema)
     errors: list[ErrorDict] = []
+    unwrap = settings.unwrap
+    default_allow_none = settings.default_allow_none
 
     if not drop_extra_keys:
         # Using data.keys() view is much faster than instantiating a new set() object
@@ -748,15 +795,16 @@ def validate_dict(
         constraints, is_outer_nullable, is_inner_nullable, is_not_null, not_null_constraint = rule_tuple
 
         if raw_value is None:
-            if not is_outer_nullable and (is_not_null or not settings.default_allow_none):
+            if not is_outer_nullable and (is_not_null or not default_allow_none):
                 msg = getattr(not_null_constraint, "message", None) or "Field is required and cannot be null."
                 code = getattr(not_null_constraint, "code", None) or "NotNull"
                 errors.append({"field": field_name, "message": msg, "code": code})
             continue
 
-        value = settings.unwrap(raw_value)
+        value = unwrap(raw_value)
+
         if value is None:
-            if not is_inner_nullable and (is_not_null or not settings.default_allow_none):
+            if not is_inner_nullable and (is_not_null or not default_allow_none):
                 msg = getattr(not_null_constraint, "message", None) or "Field is required and cannot be null."
                 code = getattr(not_null_constraint, "code", None) or "NotNull"
                 errors.append({"field": field_name, "message": msg, "code": code})
@@ -765,25 +813,19 @@ def validate_dict(
         for constraint_obj, blueprint in constraints:
             if blueprint is not None:
                 constraint_to_validate = _execute_blueprint(constraint_obj, blueprint, data.get)
-                try:
-                    constraint_to_validate.validate(value)
-                except ValidationError as e:
-                    for error_dict in e.errors:
-                        error_dict["field"] = f"{field_name}{error_dict.get('field', '')}"
-                        errors.append(error_dict)
-                except (ValueError, TypeError) as e:
-                    error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
-                    errors.append({"field": field_name, "message": str(e), "code": error_code})
+                fn = getattr(constraint_to_validate, "_validate_inner", None) or constraint_to_validate.validate
             else:
-                try:
-                    constraint_obj.validate(value)
-                except ValidationError as e:
-                    for error_dict in e.errors:
-                        error_dict["field"] = f"{field_name}{error_dict.get('field', '')}"
-                        errors.append(error_dict)
-                except (ValueError, TypeError) as e:
-                    error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
-                    errors.append({"field": field_name, "message": str(e), "code": error_code})
+                fn = getattr(constraint_obj, "_validate_inner", None) or constraint_obj.validate
+            try:
+                fn(value)
+            except ValidationError as e:
+                for error_dict in e.errors:
+                    error_dict["field"] = f"{field_name}{error_dict.get('field', '')}"
+                    errors.append(error_dict)
+            except (ValueError, TypeError) as e:
+                msg = _format_constraint_message(constraint_obj, value, str(e))
+                error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
+                errors.append({"field": field_name, "message": msg, "code": error_code})
 
         # NOTE: _recurse is intentionally omitted here to prevent O(N) useless tree walks on raw JSON
 
@@ -944,79 +986,69 @@ def validate(instance: T) -> T:
         TypeError: If the provided instance is not a valid Monk dataclass, or if an async cross-field hook is used.
         ValidationError: If the instance fails validation.
     """
-    if getattr(instance, "__monk_rules__", None) is None:
-        raise TypeError(f"Object of type {type(instance).__name__} is not a valid Monk dataclass.")
+    try:
+        rules = _obj_ga(instance, "__monk_rules__")
+        fields = _obj_ga(instance, "__monk_fields__")
+    except AttributeError:
+        raise TypeError(f"Object of type {type(instance).__name__} is not a valid Monk dataclass.") from None
 
     errors: list[ErrorDict] = []
-    rules = object.__getattribute__(instance, "__monk_rules__")
-    fields = object.__getattribute__(instance, "__monk_fields__")
+    unwrap = settings.unwrap
+    default_allow_none = settings.default_allow_none
+    primitives = _PRIMITIVE_TYPES
+
+    resolver: Callable[[str], Any] | None = None
 
     for field_name in fields:
-        raw_value = object.__getattribute__(instance, field_name)
+        raw_value = _obj_ga(instance, field_name)
         rule_tuple = rules.get(field_name)
 
         if rule_tuple:
             constraints, is_outer_nullable, is_inner_nullable, is_not_null, not_null_constraint = rule_tuple
 
             if raw_value is None:
-                if not is_outer_nullable and (is_not_null or not settings.default_allow_none):
+                if not is_outer_nullable and (is_not_null or not default_allow_none):
                     msg = getattr(not_null_constraint, "message", None) or "Field is required and cannot be null."
                     code = getattr(not_null_constraint, "code", None) or "NotNull"
                     errors.append({"field": field_name, "message": msg, "code": code})
                 continue
 
-            value = settings.unwrap(raw_value)
+            value = unwrap(raw_value)
             if value is None:
-                if not is_inner_nullable and (is_not_null or not settings.default_allow_none):
+                if not is_inner_nullable and (is_not_null or not default_allow_none):
                     msg = getattr(not_null_constraint, "message", None) or "Field is required and cannot be null."
                     code = getattr(not_null_constraint, "code", None) or "NotNull"
                     errors.append({"field": field_name, "message": msg, "code": code})
                 continue
-
-            _resolver: Callable[[str], Any] | None = None
-            if any(blueprint is not None for _, blueprint in constraints):
-
-                def _instance_resolver(target_field_name: str) -> Any:
-                    try:
-                        return object.__getattribute__(instance, target_field_name)
-                    except AttributeError:
-                        return None
-
-                _resolver = _instance_resolver
 
             for constraint_obj, blueprint in constraints:
                 if blueprint is not None:
-                    constraint_to_validate = _execute_blueprint(
-                        constraint_obj, blueprint, cast(Callable[[str], Any], _resolver)
-                    )
-                    try:
-                        constraint_to_validate.validate(value)
-                    except ValidationError as e:
-                        for error_dict in e.errors:
-                            error_dict["field"] = f"{field_name}{error_dict.get('field', '')}"
-                            errors.append(error_dict)
-                    except (ValueError, TypeError) as e:
-                        error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
-                        errors.append({"field": field_name, "message": str(e), "code": error_code})
+                    if resolver is None:
+                        resolver = _make_resolver(instance)
+                    constraint_to_validate = _execute_blueprint(constraint_obj, blueprint, resolver)
+                    # Cloned constraints have ephemeral ids — bypass cache to avoid leak.
+                    fn = getattr(constraint_to_validate, "_validate_inner", None) or constraint_to_validate.validate
                 else:
-                    try:
-                        constraint_obj.validate(value)
-                    except ValidationError as e:
-                        for error_dict in e.errors:
-                            error_dict["field"] = f"{field_name}{error_dict.get('field', '')}"
-                            errors.append(error_dict)
-                    except (ValueError, TypeError) as e:
-                        error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
-                        errors.append({"field": field_name, "message": str(e), "code": error_code})
+                    fn = getattr(constraint_obj, "_validate_inner", None) or constraint_obj.validate
+                try:
+                    fn(value)
+                except ValidationError as e:
+                    for error_dict in e.errors:
+                        error_dict["field"] = f"{field_name}{error_dict.get('field', '')}"
+                        errors.append(error_dict)
+                except (ValueError, TypeError) as e:
+                    msg = _format_constraint_message(constraint_obj, value, str(e))
+                    error_code = getattr(constraint_obj, "code", None) or type(constraint_obj).__name__
+                    errors.append({"field": field_name, "message": msg, "code": error_code})
 
-            if type(value) not in _PRIMITIVE_TYPES:
+            if type(value) not in primitives:
                 _recurse(value, field_name, errors)
         else:
-            value = settings.unwrap(raw_value)
-            if type(value) not in _PRIMITIVE_TYPES:
+            value = unwrap(raw_value)
+            if type(value) not in primitives:
                 _recurse(value, field_name, errors)
 
-    if not errors:
+    if not errors and _obj_ga(type(instance), "__monk_has_validate_hook__"):
         hook = getattr(instance, "__monk_validate__", None)
         if hook is not None:
             if inspect.iscoroutinefunction(hook) or inspect.isasyncgenfunction(hook):
@@ -1029,6 +1061,6 @@ def validate(instance: T) -> T:
         raise ValidationError(errors)
 
     # Uncloak the instance
-    object.__setattr__(instance, "__monk_safe__", True)
+    _obj_sa(instance, "__monk_safe__", True)
 
     return instance

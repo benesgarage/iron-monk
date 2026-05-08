@@ -961,3 +961,44 @@ def test_coverage_cleanup_operations() -> None:
     with pytest.raises(ValidationError) as exc7:
         next(gen7)
     assert exc7.value.errors[0]["code"] == "Predicate"
+
+
+def test_custom_message_via_validate_dict() -> None:
+    """Hot-path catch sites bypass the @constraint wrapper and must format custom
+    `message` templates themselves via `_format_constraint_message`."""
+    from typing import TypedDict
+    from monk.operations import validate_dict
+
+    class UserDict(TypedDict):
+        age: Annotated[int, Interval(ge=18, message="You picked {value}, min is {ge}")]
+
+    with pytest.raises(ValidationError) as exc:
+        validate_dict({"age": 10}, UserDict)
+    assert exc.value.errors[0]["message"] == "You picked 10, min is 18"
+
+    # Format-fallback branch: bad placeholder leaves the template intact.
+    class BadFormatDict(TypedDict):
+        age: Annotated[int, Interval(ge=18, message="Missing {nope}")]
+
+    with pytest.raises(ValidationError) as exc2:
+        validate_dict({"age": 10}, BadFormatDict)
+    assert exc2.value.errors[0]["message"] == "Missing {nope}"
+
+
+def test_post_init_with_eager_validation() -> None:
+    """`@monk(defer=False)` combined with a user `__post_init__` must run the hook
+    AND eagerly validate, exercising both paths in the orig_post_init branch."""
+
+    @monk(defer=False)
+    class M:
+        name: Annotated[str, Len(min_len=2)]
+
+        def __post_init__(self) -> None:
+            object.__setattr__(self, "marker", True)
+
+    m = M(name="ok")
+    assert object.__getattribute__(m, "marker") is True
+    assert m.name == "ok"
+
+    with pytest.raises(ValidationError):
+        M(name="x")

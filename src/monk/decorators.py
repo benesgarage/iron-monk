@@ -3,6 +3,8 @@ import functools
 import inspect
 from typing import (
     get_type_hints,
+    get_origin,
+    get_args,
     TypeVar,
     dataclass_transform,
     Callable,
@@ -12,9 +14,18 @@ from typing import (
     cast,
 )
 
-from .operations import validate, validate_arguments, validate_return, _extract_monk_metadata  # pyright: ignore[reportPrivateUsage]
+from .operations import (
+    validate,
+    validate_arguments,
+    validate_return,
+    _extract_monk_metadata,  # pyright: ignore[reportPrivateUsage]
+    _PRIMITIVE_TYPES,  # pyright: ignore[reportPrivateUsage]
+)
 from .config import settings
 from .exceptions import UnvalidatedAccessError
+
+_obj_ga = object.__getattribute__
+_obj_sa = object.__setattr__
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -51,7 +62,11 @@ def constraint(
     kwargs["slots"] = slots
 
     def wrapper(c: type[T]) -> type[T]:
-        # Intercept the validate method to swap the error message on failure
+        # Intercept the validate method to swap the error message on failure.
+        # Hot paths skip the wrapper by calling `_validate_inner` directly and
+        # formatting messages on caught exceptions; this preserves direct-call
+        # behavior (`instance.validate(value)`) while removing wrapper overhead
+        # from per-item loops.
         orig_validate = getattr(c, "validate")
 
         @functools.wraps(orig_validate)
@@ -61,7 +76,6 @@ def constraint(
             except ValueError:
                 custom_message = getattr(self, "message", None)
                 if custom_message is not None:
-                    # Safely build formatting context without deep-copying (to avoid crashes on regex/unpicklable objects)
                     ctx = {"value": value}
                     if dataclasses.is_dataclass(self):
                         for f in dataclasses.fields(self):
@@ -69,12 +83,15 @@ def constraint(
                     try:
                         formatted = custom_message.format(**ctx)
                     except Exception:
-                        formatted = custom_message  # Fallback if string formatting fails
+                        formatted = custom_message
                     raise ValueError(formatted) from None
                 raise
 
         setattr(c, "validate", new_validate)
-        return dataclasses.dataclass(**kwargs)(c)
+        new_cls = dataclasses.dataclass(**kwargs)(c)
+        # Hot-path entry point: skip wrapper, format on demand at catch sites.
+        setattr(new_cls, "_validate_inner", orig_validate)
+        return new_cls
 
     return wrapper if cls is None else wrapper(cls)
 
@@ -123,21 +140,26 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
 
         orig_post_init = getattr(original_cls, "__post_init__", None)
 
-        def __post_init__(self: Any, *args: Any, **kwargs: Any) -> None:
-            # Temporarily uncloak the instance so 3rd-party __post_init__ hooks
-            # (like Strawberry's one_of validation) can safely read fields.
-            object.__setattr__(self, "__monk_safe__", True)
+        if orig_post_init is None:
 
-            if orig_post_init is not None:
+            def __post_init__(self: Any, *args: Any, **kwargs: Any) -> None:
+                should_defer = defer if defer is not None else settings.defer
+                if not should_defer:
+                    validate(self)
+        else:
+
+            def __post_init__(self: Any, *args: Any, **kwargs: Any) -> None:
+                # Temporarily uncloak the instance so 3rd-party __post_init__ hooks
+                # (like Strawberry's one_of validation) can safely read fields.
+                _obj_sa(self, "__monk_safe__", True)
                 orig_post_init(self, *args, **kwargs)
 
-            # Explicit kwarg overrides global config
-            should_defer = defer if defer is not None else settings.defer
-            if not should_defer:
-                validate(self)
-            else:
-                # Re-cloak it for deferred validation
-                object.__setattr__(self, "__monk_safe__", False)
+                should_defer = defer if defer is not None else settings.defer
+                if not should_defer:
+                    validate(self)
+                else:
+                    # Re-cloak it for deferred validation
+                    _obj_sa(self, "__monk_safe__", False)
 
         setattr(original_cls, "__post_init__", __post_init__)
 
@@ -153,24 +175,41 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
         if dataclass_fields is not None:
             dataclass_fields.pop("__monk_safe__", None)
 
-        fields_tuple = tuple(f.name for f in dataclasses.fields(cast(Any, d_cls)))
-        setattr(d_cls, "__monk_fields__", fields_tuple)
-
         # 2. Extract metadata from type hints once
         hints = get_type_hints(d_cls, include_extras=True)
         rules = _extract_monk_metadata(hints)  # pyright: ignore[reportPrivateUsage]
 
+        # __monk_fields__ filters out primitive-typed no-rule fields. They have no
+        # constraints AND can't host nested @monk objects, so validate() can skip them.
+        fields_to_check: list[str] = []
+        for f in dataclasses.fields(cast(Any, d_cls)):
+            if f.name in rules:
+                fields_to_check.append(f.name)
+                continue
+            hint = hints[f.name]
+            base = hint
+            if hasattr(hint, "__metadata__"):
+                args = get_args(hint)
+                if args:
+                    base = args[0]
+            origin = get_origin(base)
+            if origin is None and isinstance(base, type) and base in _PRIMITIVE_TYPES:
+                continue  # primitive scalar, nothing to validate or recurse into
+            fields_to_check.append(f.name)
+
+        setattr(d_cls, "__monk_fields__", tuple(fields_to_check))
         setattr(d_cls, "__monk_rules__", rules)
+        # Skip per-instance hook lookups when the class doesn't define one.
+        setattr(d_cls, "__monk_has_validate_hook__", any("__monk_validate__" in vars(b) for b in d_cls.__mro__))
 
-        # Overwrite __getattribute__ to guard the dataclass until validated
+        # Overwrite __getattribute__ to guard the dataclass until validated.
+        # Hot path: validated access. Read __monk_safe__ first; if True, return attr immediately.
         def __getattribute__(self: Any, name: str) -> Any:
-            if name in ("validate", "__hash__") or name.startswith("_"):
-                return object.__getattribute__(self, name)
-
-            if not object.__getattribute__(self, "__monk_safe__"):
-                raise UnvalidatedAccessError(f"Monk Protection: Validate {self.__class__.__name__} before access.")
-
-            return object.__getattribute__(self, name)
+            if _obj_ga(self, "__monk_safe__"):
+                return _obj_ga(self, name)
+            if name == "validate" or name.startswith("_"):
+                return _obj_ga(self, name)
+            raise UnvalidatedAccessError(f"Monk Protection: Validate {self.__class__.__name__} before access.")
 
         setattr(d_cls, "__getattribute__", __getattribute__)
 
@@ -178,7 +217,7 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
         orig_repr = d_cls.__repr__
 
         def __repr__(self: Any) -> str:
-            if not object.__getattribute__(self, "__monk_safe__"):
+            if not _obj_ga(self, "__monk_safe__"):
                 return f"<{self.__class__.__name__} (Guarded/Unvalidated)>"
             return orig_repr(self)
 

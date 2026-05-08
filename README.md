@@ -102,19 +102,22 @@ A comprehensive suite of built-in constraints — including the kind of complex 
  ## Performance
  `iron-monk` doesn't compromise on speed.
  
- *Tested on Python 3.13, executing 100,000 simple primitive validations.*
+ *Tested on Python 3.13, primarily executing 100,000 simple primitive validations.*
 
-| Metric                    | `iron-monk`<br>*(v0.24.0)* | `msgspec`<br>*(v0.21.1)* | `pydantic`<br>*(v2.13.4)* | `attrs`<br>*(v26.1.0)* | `marshmallow`<br>*(v4.3.0)* |
-|---------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
-| **Package Size**          | **`0.09 MB`**              | `0.44 MB`                | `5.88 MB`                 | `0.21 MB`              | `0.17 MB`                   |
-| **Cold Start**            | **`34.50ms`**              | `38.21ms`                | `65.08ms`                 | `41.06ms`              | `59.39ms`                   |
-| **Object (100k)**         | `0.233s`                   | `0.013s`                 | `0.052s`                  | `0.082s`               | N/A                          |
-| **Dict (100k)**           | `0.087s`                   | `0.057s`                 | `0.049s`                  | N/A                    | `0.426s`                     |
-| **Nested Dict (100k)**    | `0.340s`                   | `0.071s`                 | `0.053s`                  | N/A                    | `1.383s`                     |
-| **Invalid Dict (100k)**   | `0.244s`                   | `0.081s`                 | `0.073s`                  | N/A                    | `1.001s`                     |
-| **Sanitized Dict (100k)** | `0.105s`                   | `0.063s`                 | `0.054s`                  | N/A                    | `0.439s`                     |
-| **Partial Dict (100k)**   | **`0.058s`**               | N/A                      | N/A                       | N/A                    | `0.267s`                     |
-| **Function Call (100k)**  | `0.168s`                   | N/A                      | `0.050s`                  | N/A                    | N/A                          |
+| Metric                          | `iron-monk`<br>*(v0.25.0)* | `msgspec`<br>*(v0.21.1)* | `pydantic`<br>*(v2.13.4)* | `attrs`<br>*(v26.1.0)* | `marshmallow`<br>*(v4.3.0)* |
+|---------------------------------|----------------------------|--------------------------|---------------------------|------------------------|------------------------------|
+| **Package Size**                | **`0.10 MB`**              | `0.44 MB`                | `5.88 MB`                 | `0.21 MB`              | `0.17 MB`                   |
+| **Cold Start**                  | **`41.55ms`**              | `44.61ms`                | `65.98ms`                 | `43.86ms`              | `66.48ms`                   |
+| **Object (100k)**               | `0.132s`                   | `0.013s`                 | `0.053s`                  | `0.085s`               | N/A                          |
+| **Dict (100k)**                 | `0.092s`                   | `0.059s`                 | `0.052s`                  | N/A                    | `0.452s`                     |
+| **Nested Dict (100k)**          | `0.327s`                   | `0.072s`                 | `0.056s`                  | N/A                    | `1.444s`                     |
+| **Invalid Dict (100k)**         | `0.246s`                   | `0.084s`                 | `0.079s`                  | N/A                    | `1.045s`                     |
+| **Sanitized Dict (100k)**       | `0.103s`                   | `0.060s`                 | `0.052s`                  | N/A                    | `0.429s`                     |
+| **Partial Dict (100k)**         | **`0.065s`**               | N/A                      | N/A                       | N/A                    | `0.275s`                     |
+| **Union Dict (100k)**           | `0.120s`                   | `0.058s`                 | `0.033s`                  | N/A                    | N/A                          |
+| **Large List (10k × 1k items)** | `1.108s`                   | `0.057s`                 | `0.184s`                  | N/A                    | N/A                          |
+| **Refs / Cross-Field (100k)**   | **`0.247s`**               | N/A                      | N/A                       | N/A                    | N/A                          |
+| **Function Call (100k)**        | `0.176s`                   | N/A                      | `0.052s`                  | N/A                    | N/A                          |
 
 **The Takeaway:** Rust-backed libraries win on raw loop speed, but `iron-monk` is the most efficient choice for the modern cloud. Faster cold starts, zero dependencies, and the only entry on the board that natively handles `PATCH` updates, payload sanitization, and standalone constraint execution make it the best-in-class validator for AWS Lambda, serverless environments, and CI/CD pipelines where install time and the network round trip are the real bottlenecks.
 

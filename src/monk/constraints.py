@@ -15,6 +15,14 @@ from .decorators import constraint
 from .exceptions import ValidationError
 from .types import ErrorDict
 from .config import settings
+from .operations import _format_constraint_message  # pyright: ignore[reportPrivateUsage]
+
+
+class _EachFastPathFail(Exception):
+    """Internal sentinel raised when Each's optimistic fast path encounters
+    a None item that is not allowed. Triggers fallback to the slow path."""
+
+    __slots__ = ()
 
 
 class Ref:
@@ -372,35 +380,65 @@ class Each:
         object.__setattr__(self, "not_null_constraint", not_null_constraint)
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, Iterable):
-            raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
-        if isinstance(value, Iterator):
-            raise TypeError(
-                f"Cannot eagerly validate exhaustible iterator '{type(value).__name__}'. Use 'validate_stream()' for lazy validation, or convert to a list/tuple first."
-            )
+        val_type = type(value)
+        if val_type is not list and val_type is not tuple:
+            if isinstance(value, Iterator):
+                raise TypeError(
+                    f"Cannot eagerly validate exhaustible iterator '{type(value).__name__}'. Use 'validate_stream()' for lazy validation, or convert to a list/tuple first."
+                )
+            if not isinstance(value, Iterable):
+                raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
+
+        constraints = self.constraints
+        allow_none = self.allow_none
+        not_null_constraint = self.not_null_constraint
+        unwrap = settings.unwrap
+
+        # Optimistic single-constraint fast path: skip per-item try/except + enumerate.
+        # On any failure, fall through to slow path that aggregates per-item errors.
+        if len(constraints) == 1:
+            c = constraints[0]
+            fn = getattr(c, "_validate_inner", None) or c.validate
+            try:
+                if allow_none:
+                    for item in value:
+                        item = unwrap(item)
+                        if item is None:
+                            continue
+                        fn(item)
+                else:
+                    for item in value:
+                        item = unwrap(item)
+                        if item is None:
+                            raise _EachFastPathFail()
+                        fn(item)
+                return  # all items valid
+            except (ValidationError, ValueError, TypeError, _EachFastPathFail):
+                pass  # Fall through to slow path with full error tracking.
 
         errors: list[ErrorDict] = []
         for i, item in enumerate(value):
-            item = settings.unwrap(item)
+            item = unwrap(item)
             if item is None:
-                if self.allow_none:
+                if allow_none:
                     continue
-                else:
-                    msg = getattr(self.not_null_constraint, "message", None) or "Field is required and cannot be null."
-                    code = getattr(self.not_null_constraint, "code", None) or "NotNull"
-                    errors.append({"field": f"[{i}]", "message": msg, "code": code})
-                    continue
+                msg = getattr(not_null_constraint, "message", None) or "Field is required and cannot be null."
+                code = getattr(not_null_constraint, "code", None) or "NotNull"
+                errors.append({"field": f"[{i}]", "message": msg, "code": code})
+                continue
 
-            for c in self.constraints:
+            for c in constraints:
+                fn = getattr(c, "_validate_inner", None) or c.validate
                 try:
-                    c.validate(item)
+                    fn(item)
                 except ValidationError as e:
                     for err in e.errors:
                         err["field"] = f"[{i}]{err.get('field', '')}"
                         errors.append(err)
                 except (ValueError, TypeError) as e:
+                    msg = _format_constraint_message(c, item, str(e))
                     error_code = getattr(c, "code", None) or type(c).__name__
-                    errors.append({"field": f"[{i}]", "message": str(e), "code": error_code})
+                    errors.append({"field": f"[{i}]", "message": msg, "code": error_code})
 
         if errors:
             raise ValidationError(errors)

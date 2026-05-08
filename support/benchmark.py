@@ -304,7 +304,137 @@ data = {
 run_marshmallow_nested = "schema.load(data)"
 
 # ---------------------------------------------------------
-# 5. Function Validation
+# 5. Union / Optional Validation
+# ---------------------------------------------------------
+setup_monk_union = """
+from typing import TypedDict, Annotated, Union
+from monk import validate_dict
+from monk.constraints import Len, Interval
+
+class UserDict(TypedDict):
+    id: Union[int, str]
+    nickname: Union[Annotated[str, Len(min_len=3)], None]
+    score: Union[Annotated[int, Interval(ge=0)], Annotated[float, Interval(ge=0.0)]]
+
+data = {"id": 1, "nickname": "kai", "score": 42}
+"""
+run_monk_union = "validate_dict(data, UserDict)"
+
+setup_pydantic_union = """
+from pydantic import Field, TypeAdapter
+from typing import TypedDict, Annotated, Union
+
+class UserDict(TypedDict):
+    id: Union[int, str]
+    nickname: Union[Annotated[str, Field(min_length=3)], None]
+    score: Union[Annotated[int, Field(ge=0)], Annotated[float, Field(ge=0.0)]]
+
+adapter = TypeAdapter(UserDict)
+data = {"id": 1, "nickname": "kai", "score": 42}
+"""
+run_pydantic_union = "adapter.validate_python(data)"
+
+setup_msgspec_union = """
+import msgspec
+from typing import TypedDict, Annotated, Union
+
+class UserDict(TypedDict):
+    id: Union[int, str]
+    nickname: Union[Annotated[str, msgspec.Meta(min_length=3)], None]
+    score: Union[Annotated[int, msgspec.Meta(ge=0)], Annotated[float, msgspec.Meta(ge=0.0)]]
+
+data = {"id": 1, "nickname": "kai", "score": 42}
+"""
+run_msgspec_union = "msgspec.convert(data, UserDict)"
+
+# ---------------------------------------------------------
+# 6. Large List Validation (Each over 1000 items)
+# ---------------------------------------------------------
+setup_monk_large_list = """
+from typing import TypedDict, Annotated
+from monk import validate_dict
+from monk.constraints import Each, Interval
+
+class Payload(TypedDict):
+    values: Annotated[list[int], Each(Interval(ge=0, le=1_000_000))]
+
+data = {"values": list(range(1000))}
+"""
+run_monk_large_list = "validate_dict(data, Payload)"
+
+setup_pydantic_large_list = """
+from pydantic import Field, TypeAdapter
+from typing import TypedDict, Annotated
+
+class Payload(TypedDict):
+    values: list[Annotated[int, Field(ge=0, le=1_000_000)]]
+
+adapter = TypeAdapter(Payload)
+data = {"values": list(range(1000))}
+"""
+run_pydantic_large_list = "adapter.validate_python(data)"
+
+setup_msgspec_large_list = """
+import msgspec
+from typing import TypedDict, Annotated
+
+class Payload(TypedDict):
+    values: list[Annotated[int, msgspec.Meta(ge=0, le=1_000_000)]]
+
+data = {"values": list(range(1000))}
+"""
+run_msgspec_large_list = "msgspec.convert(data, Payload)"
+
+# ---------------------------------------------------------
+# 7. Refs / Cross-Field Validation (monk-only feature)
+# ---------------------------------------------------------
+setup_monk_refs = """
+from typing import TypedDict, Annotated
+from monk import validate_dict
+from monk.constraints import Interval, Len, Ref
+
+class Range(TypedDict):
+    lo: int
+    hi: Annotated[int, Interval(ge=Ref("lo"))]
+    label: Annotated[str, Len(min_len=1, max_len=Ref("hi"))]
+
+data = {"lo": 1, "hi": 10, "label": "ok"}
+"""
+run_monk_refs = "validate_dict(data, Range)"
+
+# ---------------------------------------------------------
+# 8. Guard Overhead (__getattribute__ tax on validated instance)
+# ---------------------------------------------------------
+setup_monk_guard = """
+from typing import Annotated
+from monk import monk
+from monk.constraints import Len, Interval
+
+@monk(defer=False)
+class User:
+    id: int
+    username: Annotated[str, Len(min_len=3)]
+    age: Annotated[int, Interval(ge=18)]
+
+u = User(id=1, username="kai", age=25)
+"""
+run_monk_guard = "u.id; u.username; u.age"
+
+setup_plain_dc = """
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    id: int
+    username: str
+    age: int
+
+u = User(id=1, username="kai", age=25)
+"""
+run_plain_dc = "u.id; u.username; u.age"
+
+# ---------------------------------------------------------
+# 9. Function Validation
 # ---------------------------------------------------------
 setup_monk_func = """
 from typing import Annotated
@@ -359,6 +489,23 @@ marshmallow_sanitized_time = timeit.timeit(run_marshmallow_sanitized, setup=setu
 monk_partial_time = timeit.timeit(run_monk_partial, setup=setup_monk_dict, number=ITERATIONS)
 marshmallow_partial_time = timeit.timeit(run_marshmallow_partial, setup=setup_marshmallow, number=ITERATIONS)
 
+monk_union_time = timeit.timeit(run_monk_union, setup=setup_monk_union, number=ITERATIONS)
+pydantic_union_time = timeit.timeit(run_pydantic_union, setup=setup_pydantic_union, number=ITERATIONS)
+msgspec_union_time = timeit.timeit(run_msgspec_union, setup=setup_msgspec_union, number=ITERATIONS)
+
+LIST_ITERATIONS = 10_000
+monk_large_list_time = timeit.timeit(run_monk_large_list, setup=setup_monk_large_list, number=LIST_ITERATIONS)
+pydantic_large_list_time = timeit.timeit(
+    run_pydantic_large_list, setup=setup_pydantic_large_list, number=LIST_ITERATIONS
+)
+msgspec_large_list_time = timeit.timeit(run_msgspec_large_list, setup=setup_msgspec_large_list, number=LIST_ITERATIONS)
+
+monk_refs_time = timeit.timeit(run_monk_refs, setup=setup_monk_refs, number=ITERATIONS)
+
+GUARD_ITERATIONS = 1_000_000
+monk_guard_time = timeit.timeit(run_monk_guard, setup=setup_monk_guard, number=GUARD_ITERATIONS)
+plain_dc_time = timeit.timeit(run_plain_dc, setup=setup_plain_dc, number=GUARD_ITERATIONS)
+
 monk_func_time = timeit.timeit(run_monk_func, setup=setup_monk_func, number=ITERATIONS)
 pydantic_func_time = timeit.timeit(run_pydantic_func, setup=setup_pydantic_func, number=ITERATIONS)
 
@@ -393,5 +540,15 @@ print(
     f"| **Partial Dict ({ITERATIONS // 1000}k)** | `{monk_partial_time:.3f}s` | N/A | N/A | N/A | `{marshmallow_partial_time:.3f}s` | N/A |"
 )
 print(
-    f"| **Function Call ({ITERATIONS // 1000}k)**| `{monk_func_time:.3f}s` | N/A | `{pydantic_func_time:.3f}s` | N/A | N/A | N/A |"
+    f"| **Union Dict ({ITERATIONS // 1000}k)** | `{monk_union_time:.3f}s` | `{msgspec_union_time:.3f}s` | `{pydantic_union_time:.3f}s` | N/A | N/A |"
+)
+print(
+    f"| **Large List ({LIST_ITERATIONS // 1000}k×1k items)** | `{monk_large_list_time:.3f}s` | `{msgspec_large_list_time:.3f}s` | `{pydantic_large_list_time:.3f}s` | N/A | N/A |"
+)
+print(f"| **Refs / Cross-Field ({ITERATIONS // 1000}k)** | `{monk_refs_time:.3f}s` | N/A | N/A | N/A | N/A |")
+print(
+    f"| **Guard Access ({GUARD_ITERATIONS // 1000}k attr reads)** | `{monk_guard_time:.3f}s` (plain dataclass: `{plain_dc_time:.3f}s`) | N/A | N/A | N/A | N/A |"
+)
+print(
+    f"| **Function Call ({ITERATIONS // 1000}k)**| `{monk_func_time:.3f}s` | N/A | `{pydantic_func_time:.3f}s` | N/A | N/A |"
 )

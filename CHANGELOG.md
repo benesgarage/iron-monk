@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0]
+
+### Performance
+- **Hot-Path Wrapper Bypass:** The `@constraint` message-formatting wrapper is now exposed as `_validate_inner` on each constraint class. Internal validation loops dispatch through it directly and apply custom message formatting only on caught exceptions, removing per-call wrapper overhead.
+- **`Each` Optimistic Fast Path:** Single-constraint `Each` validation runs a tight loop with no per-item `try/except` or index tracking. On the first failure it falls back to a slow path that aggregates per-item errors with full bookkeeping. Validation of large homogeneous lists is up to ~44% faster.
+- **Object Init:** Per-instance validation skips primitive-typed fields with no rules entirely (filtered into `__monk_fields__` at decoration time), caches the `__monk_validate__` hook presence on the class, and uses module-level bindings for `object.__getattribute__` / `object.__setattr__`. Decorated `@monk(defer=False)` instantiation is up to ~44% faster.
+- **Guard Access:** `__getattribute__` now reads `__monk_safe__` first and short-circuits validated reads in two operations. Attribute access on validated instances is up to ~40% faster.
+- **Cached `settings.unwrap`:** Hot loops capture the bound `unwrap` method once instead of resolving `settings.unwrap` per item, while preserving the monkey-patch contract used by tests and integrations.
+- **`_UnionRouter`:** Branch origins (`get_origin(branch_type) or branch_type`) are precomputed at construction instead of recomputed per validate call.
+
+### Maintenance
+- **Benchmarks:** Added `Union`, `Large List`, `Refs / Cross-Field`, and `Guard Access` cases to `support/benchmark.py` to cover Union routing, per-item dispatch, blueprint cloning, and guard overhead respectively.
+
 ## [0.24.0]
 
 ### Added
