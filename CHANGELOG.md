@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0]
+
+### Added
+- **Auto-Synthesized Container Validation:** Inner `Annotated` and `Union` types are now extracted automatically from container hints. Patterns like `list[Annotated[int, Interval(gt=0)] | Annotated[str, Len(min_len=1)] | None]` validate per-element without an explicit `Each` wrapper.
+- **Heterogeneous Tuple Schemas:** Fixed-length tuples like `tuple[Annotated[int, Interval(gt=0)], Annotated[str, Len(min_len=1)]]` now compile to per-position rules with an enforced length check.
+- **Container Branches in Unions:** `list[X] | dict[K, V] | None` style unions now route to the correct branch and apply per-element validation inside each container branch.
+
+### Maintenance
+- **Override Safety:** When a user already supplies an outer `Each` or `DictOf`, auto-synthesis is skipped to prevent double validation of existing schemas.
+
 ## [0.23.0]
 
 ### Added

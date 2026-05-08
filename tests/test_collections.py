@@ -16,6 +16,7 @@ from monk.constraints import (
     Nullable,
     NotNull,
     UpperCase,
+    Interval,
 )
 
 
@@ -356,3 +357,142 @@ def test_dictof_constraint() -> None:
         constraint.validate(123)
     with pytest.raises(TypeError, match="missing required arguments"):
         DictOf(key=MultipleOf)
+
+
+# --- Auto-Synthesized Container Validation ---
+
+
+def test_autosynth_list_with_inner_annotated() -> None:
+    @monk(defer=False)
+    class Box:
+        ages: list[Annotated[int, Interval(ge=18)]]
+
+    Box(ages=[18, 25, 99])
+
+    with pytest.raises(ValidationError) as exc:
+        Box(ages=[10, 25, 5])
+    fields = sorted(err["field"] for err in exc.value.errors)
+    assert fields == ["ages[0]", "ages[2]"]
+
+
+def test_autosynth_list_with_inner_union() -> None:
+    @monk(defer=False)
+    class Box:
+        items: list[Annotated[int, Interval(gt=0)] | Annotated[str, Len(min_len=1)] | None]
+
+    Box(items=[1, "ok", None, 42])
+
+    with pytest.raises(ValidationError) as exc:
+        Box(items=[0, "", "good"])
+    codes = sorted(err["code"] for err in exc.value.errors)
+    assert codes == ["Interval", "Len"]
+
+
+def test_autosynth_dict_with_inner_annotated() -> None:
+    @monk(defer=False)
+    class Box:
+        scores: dict[Annotated[str, Len(min_len=2)], Annotated[int, Interval(ge=0)]]
+
+    Box(scores={"ab": 0, "abc": 5})
+
+    with pytest.raises(ValidationError) as exc:
+        Box(scores={"a": -1})
+    assert len(exc.value.errors) == 2
+
+
+def test_autosynth_homo_tuple() -> None:
+    @monk(defer=False)
+    class Box:
+        coords: tuple[Annotated[int, Interval(ge=0)], ...]
+
+    Box(coords=(1, 2, 3))
+
+    with pytest.raises(ValidationError) as exc:
+        Box(coords=(1, -2, 3, -4))
+    fields = sorted(err["field"] for err in exc.value.errors)
+    assert fields == ["coords[1]", "coords[3]"]
+
+
+def test_autosynth_hetero_tuple() -> None:
+    @monk(defer=False)
+    class Box:
+        pair: tuple[Annotated[int, Interval(gt=0)], Annotated[str, Len(min_len=1)]]
+
+    Box(pair=(1, "ok"))
+
+    with pytest.raises(ValidationError) as exc:
+        Box(pair=(0, ""))
+    fields = sorted(err["field"] for err in exc.value.errors)
+    assert fields == ["pair[0]", "pair[1]"]
+
+
+def test_autosynth_hetero_tuple_length_mismatch() -> None:
+    @monk(defer=False)
+    class Box:
+        pair: tuple[Annotated[int, Interval(gt=0)], Annotated[str, Len(min_len=1)]]
+
+    with pytest.raises(ValidationError) as exc:
+        Box(pair=(1, "ok", "extra"))  # type: ignore[arg-type]
+    assert "length" in exc.value.errors[0]["message"].lower()
+
+
+def test_autosynth_set_with_inner_annotated() -> None:
+    @monk(defer=False)
+    class Box:
+        flags: set[Annotated[int, Interval(ge=0)]]
+
+    Box(flags={0, 1, 2})
+
+    with pytest.raises(ValidationError) as exc:
+        Box(flags={-1, 0})
+    assert any(err["code"] == "Interval" for err in exc.value.errors)
+
+
+def test_autosynth_nested_list_of_list() -> None:
+    @monk(defer=False)
+    class Box:
+        matrix: list[list[Annotated[int, Interval(ge=0)]]]
+
+    Box(matrix=[[0, 1], [2, 3]])
+
+    with pytest.raises(ValidationError) as exc:
+        Box(matrix=[[0, -1], [-2, 3]])
+    fields = sorted(err["field"] for err in exc.value.errors)
+    assert fields == ["matrix[0][1]", "matrix[1][0]"]
+
+
+def test_autosynth_skipped_when_user_each_present() -> None:
+    """User explicit Each must NOT be doubled by auto-synth."""
+
+    @monk(defer=False)
+    class Box:
+        ages: Annotated[list[Annotated[int, Interval(ge=0)]], Each(Interval(le=100))]
+
+    with pytest.raises(ValidationError) as exc:
+        Box(ages=[150])
+    # Only the user's outer Each should fire — not the inner Annotated.
+    assert len(exc.value.errors) == 1
+    assert exc.value.errors[0]["code"] == "Interval"
+
+
+def test_autosynth_container_in_union_branch() -> None:
+    @monk(defer=False)
+    class Box:
+        payload: list[Annotated[int, Interval(gt=0)]] | dict[str, Annotated[int, Interval(gt=0)]]
+
+    Box(payload=[1, 2])
+    Box(payload={"a": 1})
+
+    with pytest.raises(ValidationError):
+        Box(payload=[0, -1])
+
+
+def test_autosynth_bare_container_unaffected() -> None:
+    """`list[int]` (no inner annotation) should remain a no-op."""
+
+    @monk(defer=False)
+    class Box:
+        items: list[int]
+
+    Box(items=[1, 2, 3])
+    Box(items=[])

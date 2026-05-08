@@ -1057,12 +1057,12 @@ class DictOf:
         object.__setattr__(self, "_key_constraints", _prep(self.key))
         object.__setattr__(self, "_value_constraints", _prep(self.value))
 
-    def validate(self, data: Any) -> None:
-        if not isinstance(data, dict):
-            raise TypeError(f"Type '{type(data).__name__}' is not a dictionary.")
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, dict):
+            raise TypeError(f"Type '{type(value).__name__}' is not a dictionary.")
 
         errors: list[ErrorDict] = []
-        for k, v in data.items():
+        for k, v in value.items():
             k = settings.unwrap(k)
             v = settings.unwrap(v)
             if self._key_constraints:

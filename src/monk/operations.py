@@ -26,6 +26,10 @@ _PRIMITIVE_TYPES = frozenset((str, int, float, bool, type(None)))
 
 _UNION_TYPES: tuple[Any, ...] = (Union, types.UnionType)
 
+_CONTAINER_ORIGINS: tuple[Any, ...] = (list, set, frozenset, tuple, dict)
+
+_USER_CONTAINER_CONSTRAINT_NAMES: frozenset[str] = frozenset(("Each", "DictOf", "_TupleSchema"))
+
 
 class _RefBlueprint:
     """A mapping of where Refs live inside a constraint tree."""
@@ -190,6 +194,51 @@ class _UnionRouter(MonkConstraint):
         raise ValueError("Value did not match any of the allowed union branches. Must satisfy at least one.")
 
 
+class _TupleSchema(MonkConstraint):
+    """Internal constraint that validates fixed-length heterogeneous tuples by applying
+    per-position rules synthesized from `tuple[A, B, C]` style hints."""
+
+    __slots__ = ("validators", "expected_len", "code")
+
+    def __init__(self, validators: list[tuple[list[MonkConstraint], bool] | None]) -> None:
+        self.validators = validators
+        self.expected_len = len(validators)
+        self.code = "TupleSchema"
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, tuple):
+            raise TypeError(f"Type '{type(value).__name__}' is not a tuple.")
+        if len(value) != self.expected_len:
+            raise ValueError(f"Tuple length must be {self.expected_len}, got {len(value)}.")
+
+        errors: list[ErrorDict] = []
+        for i, (raw_item, rule) in enumerate(zip(value, self.validators)):
+            if rule is None:
+                continue
+            constraints, allow_none = rule
+            item = settings.unwrap(raw_item)
+            if item is None:
+                if allow_none:
+                    continue
+                errors.append(
+                    {"field": f"[{i}]", "message": "Field is required and cannot be null.", "code": "NotNull"}
+                )
+                continue
+            for c in constraints:
+                try:
+                    c.validate(item)
+                except ValidationError as e:
+                    for err in e.errors:
+                        err["field"] = f"[{i}]{err.get('field', '')}"
+                        errors.append(err)
+                except (ValueError, TypeError) as e:
+                    error_code = getattr(c, "code", None) or type(c).__name__
+                    errors.append({"field": f"[{i}]", "message": str(e), "code": error_code})
+
+        if errors:
+            raise ValidationError(errors)
+
+
 def _prepare_constraints(
     constraints: Iterable[Any],
 ) -> tuple[list[tuple[MonkConstraint, _RefBlueprint | None]], bool, bool, Any]:
@@ -224,6 +273,149 @@ def _prepare_constraints(
     return actual_constraints, is_nullable, is_not_null, not_null_constraint
 
 
+def _has_outer_container_synth(metadata: Iterable[Any]) -> bool:
+    """Returns True when user already provided an Each/DictOf-style outer constraint,
+    so auto-synthesis must skip to avoid double validation."""
+    for m in metadata:
+        cls = m if isinstance(m, type) else type(m)
+        if cls.__name__ in _USER_CONTAINER_CONSTRAINT_NAMES:
+            return True
+    return False
+
+
+def _compile_inner_validator(arg: Any) -> tuple[list[MonkConstraint], bool] | None:
+    """Compile a type-hint argument (element/branch type) into per-value constraints
+    plus an `allow_none` flag. Returns None when no validation is needed."""
+    type_meta_map = getattr(settings, "type_metadata", {})
+
+    metadata = list(getattr(arg, "__metadata__", []))
+    base = arg
+    if metadata:
+        peeled = get_args(arg)
+        if peeled:
+            base = peeled[0]
+
+    base_origin = get_origin(base)
+    base_args = get_args(base)
+
+    extra = type_meta_map.get(base_origin or base, [])
+    if extra:
+        metadata = metadata + list(extra)
+
+    constraints: list[MonkConstraint] = []
+    allow_none = False
+
+    if metadata:
+        prepared, is_nullable, _, _ = _prepare_constraints(metadata)
+        constraints.extend(c for c, _ in prepared)
+        allow_none = allow_none or is_nullable
+
+    if base_origin in _UNION_TYPES:
+        branches: list[tuple[Any, list[tuple[MonkConstraint, _RefBlueprint | None]]]] = []
+        any_branch_has_constraints = False
+        for branch in base_args:
+            if branch is type(None):
+                allow_none = True
+                continue
+
+            branch_compiled = _compile_inner_validator(branch)
+
+            branch_type: Any = branch
+            if getattr(branch, "__metadata__", None):
+                bargs = get_args(branch)
+                if bargs:
+                    branch_type = bargs[0]
+            b_origin = get_origin(branch_type)
+            if b_origin is not None:
+                branch_type = b_origin
+
+            if branch_compiled is not None:
+                branch_constraints, branch_nullable = branch_compiled
+                allow_none = allow_none or branch_nullable
+                prepared_branch = [(c, _build_blueprint(c)) for c in branch_constraints]
+                if prepared_branch:
+                    any_branch_has_constraints = True
+                branches.append((branch_type, prepared_branch))
+            else:
+                branches.append((branch_type, []))
+
+        if any_branch_has_constraints:
+            constraints.append(_UnionRouter(branches))
+
+    elif base_origin in _CONTAINER_ORIGINS:
+        nested = _synthesize_container_constraint(base)
+        if nested is not None:
+            constraints.append(nested)
+
+    if not constraints and not allow_none:
+        return None
+    return constraints, allow_none
+
+
+def _synthesize_container_constraint(hint: Any) -> MonkConstraint | None:
+    """Build an Each / DictOf / _TupleSchema from a container hint whose inner args
+    carry Annotated/Union validation. Returns None when nothing to enforce."""
+    origin = get_origin(hint)
+    args = get_args(hint)
+    if origin not in _CONTAINER_ORIGINS or not args:
+        return None
+
+    # Lazy import: constraints.py → decorators.py → operations.py would cycle at module load.
+    from .constraints import Each, DictOf, Nullable
+
+    if origin is dict:
+        if len(args) != 2:
+            return None
+        key_compiled = _compile_inner_validator(args[0])
+        val_compiled = _compile_inner_validator(args[1])
+        if key_compiled is None and val_compiled is None:
+            return None
+        key_constraints = key_compiled[0] if key_compiled else None
+        val_constraints = val_compiled[0] if val_compiled else None
+        if not key_constraints and not val_constraints:
+            return None
+        return DictOf(
+            key=key_constraints if key_constraints else None,
+            value=val_constraints if val_constraints else None,
+        )
+
+    if origin is tuple:
+        if len(args) == 2 and args[1] is Ellipsis:
+            inner = _compile_inner_validator(args[0])
+            if inner is None:
+                return None
+            inner_constraints, inner_allow_none = inner
+            if not inner_constraints:
+                return None
+            each_args: list[Any] = list(inner_constraints)
+            if inner_allow_none:
+                each_args.append(Nullable)
+            return Each(*each_args)
+
+        positional: list[tuple[list[MonkConstraint], bool] | None] = []
+        for a in args:
+            if type(a).__name__ in ("TypeVarTuple", "Unpack"):
+                return None
+            try:
+                positional.append(_compile_inner_validator(a))
+            except Exception:
+                return None
+        if not any(p is not None for p in positional):
+            return None
+        return _TupleSchema(positional)
+
+    inner = _compile_inner_validator(args[0])
+    if inner is None:
+        return None
+    inner_constraints, inner_allow_none = inner
+    if not inner_constraints:
+        return None
+    each_args = list(inner_constraints)
+    if inner_allow_none:
+        each_args.append(Nullable)
+    return Each(*each_args)
+
+
 def _extract_monk_metadata(
     hints: dict[str, Any],
 ) -> dict[str, tuple[list[tuple[MonkConstraint, _RefBlueprint | None]], bool, bool, bool, Any]]:
@@ -234,6 +426,17 @@ def _extract_monk_metadata(
     for name, hint in hints.items():
         metadata = getattr(hint, "__metadata__", [])
         extra_meta = type_meta_map.get(get_origin(hint) or hint, [])
+
+        container_target = hint
+        if metadata:
+            peeled_outer = get_args(hint)
+            if peeled_outer:
+                container_target = peeled_outer[0]
+        if get_origin(container_target) in _CONTAINER_ORIGINS:
+            if not _has_outer_container_synth(list(metadata) + list(extra_meta)):
+                synthesized = _synthesize_container_constraint(container_target)
+                if synthesized is not None:
+                    extra_meta = list(extra_meta) + [synthesized]
 
         if not metadata:
             args = get_args(hint)
@@ -262,16 +465,17 @@ def _extract_monk_metadata(
                         continue
 
                     arg_type = arg
-                    arg_metadata = getattr(arg, "__metadata__", [])
+                    arg_metadata: Any = getattr(arg, "__metadata__", [])
 
                     if not arg_metadata:
                         inner_args = get_args(arg)
                         inner_origin = get_origin(arg)
-                        if (
-                            inner_args
-                            and inner_origin not in (list, set, frozenset, tuple, dict)
-                            and inner_origin not in _UNION_TYPES
-                        ):
+                        if inner_origin in _CONTAINER_ORIGINS:
+                            synth_branch = _synthesize_container_constraint(arg)
+                            if synth_branch is not None:
+                                arg_metadata = [synth_branch]
+                            arg_type = inner_origin
+                        elif inner_args and inner_origin not in _UNION_TYPES:
                             arg_type = inner_args[0]
                             for inner_arg in inner_args:
                                 inner_metadata = getattr(inner_arg, "__metadata__", [])
