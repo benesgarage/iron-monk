@@ -1054,13 +1054,23 @@ def validate(instance: T) -> T:
             if inspect.iscoroutinefunction(hook) or inspect.isasyncgenfunction(hook):
                 raise TypeError("iron-monk is strictly synchronous. Async __monk_validate__ hooks are not supported.")
 
-            result = hook()
-            _process_monk_validate_result(result, errors)
+            # Field-level validation passed; uncloak so the hook can read sibling
+            # fields without tripping the guard. Recloak if the hook fails or the
+            # final aggregated result still has errors.
+            _obj_sa(instance, "__monk_safe__", True)
+            try:
+                result = hook()
+                _process_monk_validate_result(result, errors)
+            except BaseException:
+                _obj_sa(instance, "__monk_safe__", False)
+                raise
+            if errors:
+                _obj_sa(instance, "__monk_safe__", False)
 
     if errors:
         raise ValidationError(errors)
 
-    # Uncloak the instance
+    # Uncloak the instance (idempotent if the hook already did so).
     _obj_sa(instance, "__monk_safe__", True)
 
     return instance

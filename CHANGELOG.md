@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.1]
+
+### Fixed
+- **`__monk_validate__` Field Access:** Cross-field hooks could not read sibling attributes — the guard still raised `UnvalidatedAccessError` because the hook ran before the instance was uncloaked. The instance is now uncloaked just before the hook runs (after field-level validation passes) and re-cloaked if the hook raises or returns aggregated errors.
+
 ## [0.25.0]
 
 ### Performance

@@ -158,6 +158,51 @@ def test_invalid_tuple_items_type_error() -> None:
         validate(BadTupleItems())
 
 
+def test_cross_field_hook_can_read_fields() -> None:
+    """The hook runs after field-level validation passes, so it must be able to
+    read sibling fields without tripping the unvalidated-access guard."""
+
+    @monk
+    class Range:
+        lo: Annotated[int, Interval(ge=0)]
+        hi: Annotated[int, Interval(ge=0)]
+
+        def __monk_validate__(self) -> Iterator[MonkError]:
+            if self.lo > self.hi:
+                yield ("hi", f"hi ({self.hi}) must be >= lo ({self.lo})")
+
+    # Hook reads fields, returns no error: instance is fully accessible afterward.
+    r = validate(Range(lo=1, hi=5))
+    assert r.lo == 1
+    assert r.hi == 5
+
+    # Hook reads fields, returns an error: instance is recloaked on raise.
+    with pytest.raises(ValidationError) as exc:
+        validate(Range(lo=10, hi=2))
+    assert exc.value.errors[0]["field"] == "hi"
+    assert "hi (2) must be >= lo (10)" in exc.value.errors[0]["message"]
+
+
+def test_cross_field_hook_recloaks_on_exception() -> None:
+    """If the hook raises an unexpected exception, the instance must remain
+    cloaked so callers don't accidentally access an unvalidated object."""
+    from monk.exceptions import UnvalidatedAccessError
+
+    @monk
+    class M:
+        x: int
+
+        def __monk_validate__(self) -> Any:
+            raise RuntimeError("boom")
+
+    instance = M(x=5)
+    with pytest.raises(RuntimeError, match="boom"):
+        validate(instance)
+
+    with pytest.raises(UnvalidatedAccessError):
+        instance.x
+
+
 def test_cross_field_inheritance() -> None:
     class BaseEvent:
         def __monk_validate__(self) -> Iterator[MonkError]:
