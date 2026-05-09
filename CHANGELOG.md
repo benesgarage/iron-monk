@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0]
+
+### Added
+- **Context-aware validation:** New `Ctx("key")` marker (in `monk.constraints`) — twin of `Ref`, but resolves from a read-only mapping passed at the call site. `validate()` and `validate_dict()` gain a `context=` kwarg that flows through the blueprint compiler, into nested `@monk` instances, and into `__monk_validate__` hooks whose signature accepts a second positional argument. Lets a single model carry rules whose values live outside it (current user, tenant config, clock, feature flags) without globals or thread-locals. `MissingContextError` is raised when a `Ctx` marker is encountered but no context was passed; a missing key inside a provided context is aggregated as a normal `ValidationError` with `code="MissingContextKey"`.
+
+### Fixed
+- **`AnyOf` / `AllOf` typing-cache collision:** The `constraints` field on `AnyOf` and `AllOf` was excluded from `__eq__` / `__hash__`, so `typing.Annotated` could intern two value-different `AnyOf(...)` (or `AllOf(...)`) instances as the same alias. Now included in compare so each instance is distinguished.
+
 ## [0.28.0]
 
 ### Added

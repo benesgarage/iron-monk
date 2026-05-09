@@ -200,7 +200,34 @@ def monk(obj: Any = None, *, defer: bool | None = None, **dataclass_kwargs: Any)
         setattr(d_cls, "__monk_fields__", tuple(fields_to_check))
         setattr(d_cls, "__monk_rules__", rules)
         # Skip per-instance hook lookups when the class doesn't define one.
-        setattr(d_cls, "__monk_has_validate_hook__", any("__monk_validate__" in vars(b) for b in d_cls.__mro__))
+        has_hook = any("__monk_validate__" in vars(b) for b in d_cls.__mro__)
+        setattr(d_cls, "__monk_has_validate_hook__", has_hook)
+        # If the hook signature accepts a second positional arg (after self), forward
+        # the validation context to it. Detected once here so the hot path stays a
+        # single attribute read.
+        wants_ctx = False
+        if has_hook:
+            hook_fn = getattr(d_cls, "__monk_validate__", None)
+            if hook_fn is not None:
+                try:
+                    hook_sig = inspect.signature(hook_fn)
+                    params = [
+                        p
+                        for p in hook_sig.parameters.values()
+                        if p.kind
+                        in (
+                            inspect.Parameter.POSITIONAL_ONLY,
+                            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                        )
+                    ]
+                    # Bound method: self is excluded; an extra positional means context.
+                    # Unbound function (defined on class): self is the first positional;
+                    # context would be the second.
+                    threshold = 0 if inspect.ismethod(hook_fn) else 1
+                    wants_ctx = len(params) > threshold
+                except (TypeError, ValueError):
+                    wants_ctx = False
+        setattr(d_cls, "__monk_validate_wants_ctx__", wants_ctx)
 
         # Overwrite __getattribute__ to guard the dataclass until validated.
         # Hot path: validated access. Read __monk_safe__ first; if True, return attr immediately.

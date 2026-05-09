@@ -53,6 +53,36 @@ class Ref:
         return f"Ref('{self.field_name}')"
 
 
+class Ctx:
+    """A marker used to reference a value from the validation context.
+
+    Resolved at validation time from the ``context`` mapping passed to
+    ``validate()``, ``validate_dict()``, or ``instance.validate()``. If the
+    mapping is missing the key, a ``ValidationError`` is raised on the
+    enclosing field. If no context was provided at all, a
+    ``MissingContextError`` is raised (programmer error).
+
+    Example:
+        from typing import Annotated
+        from monk import monk, validate
+        from monk.constraints import Interval, Ctx
+
+        @monk
+        class AgeGate:
+            age: Annotated[int, Interval(gte=Ctx("min_age"))]
+
+        validate(AgeGate(age=15), context={"min_age": 18})  # raises
+    """
+
+    __slots__ = ("key",)
+
+    def __init__(self, key: str):
+        self.key = key
+
+    def __repr__(self) -> str:
+        return f"Ctx('{self.key}')"
+
+
 @constraint
 class Predicate:
     """Validates that a value satisfies a given boolean-returning function."""
@@ -103,7 +133,7 @@ class Not:
 class AnyOf:
     """Validates that a value satisfies at least one of the given constraints."""
 
-    constraints: tuple[MonkConstraint, ...] = field(init=False, repr=False, compare=False)
+    constraints: tuple[MonkConstraint, ...] = field(init=False, repr=False)
     message: str | None = field(default=None, kw_only=True)
     code: str | None = field(default=None, kw_only=True)
 
@@ -142,7 +172,7 @@ class AnyOf:
 class AllOf:
     """Validates that a value satisfies all of the given constraints."""
 
-    constraints: tuple[MonkConstraint, ...] = field(init=False, repr=False, compare=False)
+    constraints: tuple[MonkConstraint, ...] = field(init=False, repr=False)
     message: str | None = field(default=None, kw_only=True)
     code: str | None = field(default=None, kw_only=True)
 
@@ -343,10 +373,10 @@ class Eq:
 class Interval:
     """Numeric or Comparable Interval bounds"""
 
-    gt: SupportsGt | Ref | None = None
-    ge: SupportsGe | Ref | None = None
-    lt: SupportsLt | Ref | None = None
-    le: SupportsLe | Ref | None = None
+    gt: SupportsGt | Ref | Ctx | None = None
+    ge: SupportsGe | Ref | Ctx | None = None
+    lt: SupportsLt | Ref | Ctx | None = None
+    le: SupportsLe | Ref | Ctx | None = None
     message: str | None = None
     code: str | None = None
 
@@ -400,17 +430,17 @@ IsTzNaive = Predicate(_is_tz_naive)
 
 @constraint
 class Len:
-    min_len: Annotated[int, NonNegative] | Ref = 0
-    max_len: Annotated[int | None, NonNegative] | Ref = None
+    min_len: Annotated[int, NonNegative] | Ref | Ctx = 0
+    max_len: Annotated[int | None, NonNegative] | Ref | Ctx = None
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.min_len, Ref):
+        if not isinstance(self.min_len, (Ref, Ctx)):
             NonNegative.validate(self.min_len)
-        if self.max_len is not None and not isinstance(self.max_len, Ref):
+        if self.max_len is not None and not isinstance(self.max_len, (Ref, Ctx)):
             NonNegative.validate(self.max_len)
-            if not isinstance(self.min_len, Ref) and self.min_len > self.max_len:
+            if not isinstance(self.min_len, (Ref, Ctx)) and self.min_len > self.max_len:
                 raise ValueError(f"min_len ({self.min_len}) cannot be greater than max_len ({self.max_len}).")
 
     def validate(self, value: Any) -> None:
@@ -433,12 +463,12 @@ NonEmpty = Len(min_len=1)
 
 @constraint
 class MultipleOf:
-    multiple_of: SupportsMod | Ref
+    multiple_of: SupportsMod | Ref | Ctx
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.multiple_of, Ref) and self.multiple_of == 0:
+        if not isinstance(self.multiple_of, (Ref, Ctx)) and self.multiple_of == 0:
             raise ValueError("multiple_of cannot be 0.")
 
     def validate(self, value: Any) -> None:
@@ -476,12 +506,12 @@ class Match:
 class OneOf:
     """Validates that a value is an exact member of a predefined set of choices."""
 
-    choices: Iterable[Any] | Ref
+    choices: Iterable[Any] | Ref | Ctx
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.choices, Ref):
+        if not isinstance(self.choices, (Ref, Ctx)):
             import enum
 
             raw = self.choices
@@ -733,7 +763,7 @@ class Email:
 
 @constraint
 class StartsWith:
-    prefix: str | Ref
+    prefix: str | Ref | Ctx
     message: str | None = None
     code: str | None = None
 
@@ -747,7 +777,7 @@ class StartsWith:
 
 @constraint
 class EndsWith:
-    suffix: str | Ref
+    suffix: str | Ref | Ctx
     message: str | None = None
     code: str | None = None
 
@@ -939,13 +969,13 @@ class JSON:
 class ContainsKeys:
     """Validates that a dictionary contains all the specified keys."""
 
-    keys: Iterable[Any] | Ref
+    keys: Iterable[Any] | Ref | Ctx
     _required_keys: frozenset[Any] = field(init=False, repr=False, compare=False)
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.keys, Ref):
+        if not isinstance(self.keys, (Ref, Ctx)):
             object.__setattr__(self, "_required_keys", frozenset(self.keys))
 
     def validate(self, value: Any) -> None:
@@ -966,13 +996,13 @@ class ContainsKeys:
 class Subset:
     """Validates that all elements in a collection are within a predefined set of choices."""
 
-    choices: Iterable[Any] | Ref
+    choices: Iterable[Any] | Ref | Ctx
     _allowed: frozenset[Any] = field(init=False, repr=False, compare=False)
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.choices, Ref):
+        if not isinstance(self.choices, (Ref, Ctx)):
             object.__setattr__(self, "_allowed", frozenset(self.choices))
 
     def validate(self, value: Any) -> None:
@@ -996,12 +1026,12 @@ class Subset:
 class ExactLen:
     """Validates that a sized collection or string is exactly a specific length."""
 
-    length: Annotated[int, NonNegative] | Ref
+    length: Annotated[int, NonNegative] | Ref | Ctx
     message: str | None = None
     code: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.length, Ref):
+        if not isinstance(self.length, (Ref, Ctx)):
             NonNegative.validate(self.length)
 
     def validate(self, value: Any) -> None:

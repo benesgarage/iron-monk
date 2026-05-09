@@ -10,13 +10,14 @@ from typing import (
     AsyncIterable,
     AsyncIterator,
     Iterator,
+    Mapping,
     cast,
     get_origin,
     get_args,
     get_type_hints,
     Union,
 )
-from .exceptions import ValidationError
+from .exceptions import ValidationError, MissingContextError
 from .types import ErrorDict
 from .config import settings
 from .protocols import MonkConstraint
@@ -92,7 +93,7 @@ def _build_blueprint(constraint: Any) -> _RefBlueprint | None:
             if inspect.ismethod(value) and getattr(value, "__self__", None) is constraint:
                 continue
             attrs_to_copy.append(field_name)
-            if type(value).__name__ == "Ref":
+            if type(value).__name__ in ("Ref", "Ctx"):
                 refs[field_name] = value
                 has_refs = True
         except AttributeError:
@@ -148,10 +149,17 @@ def _execute_blueprint(
     constraint: Any,
     blueprint: _RefBlueprint,
     get_val: Callable[[str], Any],
+    get_ctx: Callable[[str], Any] | None = None,
 ) -> Any:
     """
-    Clones a constraint and maps Ref values using the compiled blueprint.
-    get_val is the method which fetches the Ref values
+    Clones a constraint and maps Ref / Ctx values using the compiled blueprint.
+
+    ``get_val`` resolves ``Ref(field_name)`` markers from sibling fields/args.
+    ``get_ctx`` resolves ``Ctx(key)`` markers from a user-supplied context
+    mapping. If a Ctx marker is present but ``get_ctx`` is None, a
+    ``MissingContextError`` is raised (programmer error). If the key is
+    absent from the provided context, a ``ValidationError`` is raised so the
+    caller can aggregate it with other field errors.
     """
     cloned_constraint = type(constraint).__new__(type(constraint))  # type: ignore[call-overload]
 
@@ -159,8 +167,26 @@ def _execute_blueprint(
         _obj_sa(cloned_constraint, attr_name, getattr(constraint, attr_name))
 
     unwrap = settings.unwrap
-    for attr_name, ref_obj in blueprint.refs.items():
-        resolved_val = unwrap(get_val(ref_obj.field_name))
+    for attr_name, marker in blueprint.refs.items():
+        if type(marker).__name__ == "Ctx":
+            if get_ctx is None:
+                raise MissingContextError(
+                    f"Constraint references Ctx({marker.key!r}) but no context= was passed to validate()."
+                )
+            try:
+                resolved_val = unwrap(get_ctx(marker.key))
+            except KeyError:
+                raise ValidationError(
+                    [
+                        {
+                            "field": "",
+                            "message": f"Required context key '{marker.key}' is missing.",
+                            "code": "MissingContextKey",
+                        }
+                    ]
+                ) from None
+        else:
+            resolved_val = unwrap(get_val(marker.field_name))
         _obj_sa(cloned_constraint, attr_name, resolved_val)
 
     for nested_attr, nested_blueprint in blueprint.nested.items():
@@ -171,7 +197,9 @@ def _execute_blueprint(
                 new_constraint = []
                 for (inner_constraint, _), inner_blueprint in zip(branch_constraints, branch_blueprints):
                     if inner_blueprint is not None:
-                        new_constraint.append((_execute_blueprint(inner_constraint, inner_blueprint, get_val), None))
+                        new_constraint.append(
+                            (_execute_blueprint(inner_constraint, inner_blueprint, get_val, get_ctx), None)
+                        )
                     else:
                         new_constraint.append((inner_constraint, None))
                 new_val.append((branch_type, new_constraint))
@@ -181,18 +209,22 @@ def _execute_blueprint(
         val = getattr(cloned_constraint, nested_attr)
         if isinstance(val, tuple):
             new_val_tuple = tuple(
-                _execute_blueprint(inner_constraint, inner_blueprint, get_val) if inner_blueprint else inner_constraint
+                _execute_blueprint(inner_constraint, inner_blueprint, get_val, get_ctx)
+                if inner_blueprint
+                else inner_constraint
                 for inner_constraint, inner_blueprint in zip(val, nested_blueprint)
             )
             _obj_sa(cloned_constraint, nested_attr, new_val_tuple)
         elif isinstance(val, list):
             new_val_list = [
-                _execute_blueprint(inner_constraint, inner_blueprint, get_val) if inner_blueprint else inner_constraint
+                _execute_blueprint(inner_constraint, inner_blueprint, get_val, get_ctx)
+                if inner_blueprint
+                else inner_constraint
                 for inner_constraint, inner_blueprint in zip(val, nested_blueprint)
             ]
             _obj_sa(cloned_constraint, nested_attr, new_val_list)
         else:
-            new_val_single = _execute_blueprint(val, nested_blueprint, get_val)
+            new_val_single = _execute_blueprint(val, nested_blueprint, get_val, get_ctx)
             _obj_sa(cloned_constraint, nested_attr, new_val_single)
 
     return cloned_constraint
@@ -623,13 +655,13 @@ def _extract_monk_metadata(
     return rules
 
 
-def _recurse(val: Any, prefix: str, errors: list[ErrorDict]) -> None:
+def _recurse(val: Any, prefix: str, errors: list[ErrorDict], context: Mapping[str, Any] | None = None) -> None:
     """Recursively validates nested Monk objects and bubbles up errors."""
     val = settings.unwrap(val)
     # getattr(..., None) is faster than hasattr + getattr
     if getattr(val, "__monk_rules__", None) is not None:
         try:
-            validate(val)
+            validate(val, context=context)
         except ValidationError as e:
             for err in e.errors:
                 err["field"] = f"{prefix}.{err['field']}"
@@ -642,15 +674,15 @@ def _recurse(val: Any, prefix: str, errors: list[ErrorDict]) -> None:
     if val_type is list or val_type is tuple:
         for i, item in enumerate(val):
             if type(item) not in primitives:
-                _recurse(item, f"{prefix}[{i}]", errors)
+                _recurse(item, f"{prefix}[{i}]", errors, context)
     elif val_type is dict:
         for key, value in val.items():
             if type(value) not in primitives:
-                _recurse(value, f"{prefix}[{repr(key)}]", errors)
+                _recurse(value, f"{prefix}[{repr(key)}]", errors, context)
     elif val_type is set or val_type is frozenset:  # Cannot be indexed
         for item in val:
             if type(item) not in primitives:
-                _recurse(item, prefix, errors)
+                _recurse(item, prefix, errors, context)
 
 
 def validate_arguments(
@@ -764,7 +796,12 @@ def _get_schema_rules(
 
 
 def validate_dict(
-    data: dict[str, Any], schema: type, *, partial: bool = False, drop_extra_keys: bool = False
+    data: dict[str, Any],
+    schema: type,
+    *,
+    partial: bool = False,
+    drop_extra_keys: bool = False,
+    context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validates a raw dictionary against a TypedDict or Dataclass schema without instantiating an object.
 
@@ -773,17 +810,21 @@ def validate_dict(
         schema (type): The TypedDict or Dataclass schema containing the validation rules.
         partial (bool, optional): If True, ignores keys that are missing from the payload (useful for PATCH requests). Defaults to False.
         drop_extra_keys (bool, optional): If True, strips any keys not explicitly defined in the schema. Defaults to False.
+        context (Mapping[str, Any] | None, optional): Read-only mapping used to resolve
+            ``Ctx(key)`` markers inside constraints. Defaults to None.
 
     Returns:
         dict[str, Any]: The validated (and optionally sanitized) dictionary.
 
     Raises:
         ValidationError: If the dictionary fails any validation constraints or contains unrecognized keys (when drop_extra_keys is False).
+        MissingContextError: If a constraint references ``Ctx(...)`` but no context was provided.
     """
     allowed_keys, rules = _get_schema_rules(schema)
     errors: list[ErrorDict] = []
     unwrap = settings.unwrap
     default_allow_none = settings.default_allow_none
+    ctx_resolver: Callable[[str], Any] | None = context.__getitem__ if context is not None else None
 
     if not drop_extra_keys:
         # Using data.keys() view is much faster than instantiating a new set() object
@@ -822,7 +863,13 @@ def validate_dict(
 
         for constraint_obj, blueprint in constraints:
             if blueprint is not None:
-                constraint_to_validate = _execute_blueprint(constraint_obj, blueprint, data.get)
+                try:
+                    constraint_to_validate = _execute_blueprint(constraint_obj, blueprint, data.get, ctx_resolver)
+                except ValidationError as e:
+                    for error_dict in e.errors:
+                        error_dict["field"] = f"{field_name}{error_dict.get('field', '')}"
+                        errors.append(error_dict)
+                    continue
                 fn = getattr(constraint_to_validate, "_validate_inner", None) or constraint_to_validate.validate
             else:
                 fn = getattr(constraint_obj, "_validate_inner", None) or constraint_obj.validate
@@ -980,7 +1027,7 @@ def _process_monk_validate_result(result: Any, errors: list[ErrorDict]) -> None:
             )
 
 
-def validate(instance: T) -> T:
+def validate(instance: T, *, context: Mapping[str, Any] | None = None) -> T:
     """Validates a Monk dataclass instance.
 
     Executes all field-level constraints. If all field-level constraints pass, it then executes
@@ -988,6 +1035,10 @@ def validate(instance: T) -> T:
 
     Args:
         instance (T): The instantiated Monk dataclass to validate.
+        context (Mapping[str, Any] | None, optional): Read-only mapping used to resolve
+            ``Ctx(key)`` markers inside constraints. Also forwarded to
+            ``__monk_validate__`` when its signature accepts a second positional argument.
+            Defaults to None.
 
     Returns:
         T: The validated dataclass instance, which is now fully unlocked for attribute access.
@@ -995,6 +1046,7 @@ def validate(instance: T) -> T:
     Raises:
         TypeError: If the provided instance is not a valid Monk dataclass, or if an async cross-field hook is used.
         ValidationError: If the instance fails validation.
+        MissingContextError: If a constraint references ``Ctx(...)`` but no context was provided.
     """
     try:
         rules = _obj_ga(instance, "__monk_rules__")
@@ -1008,6 +1060,7 @@ def validate(instance: T) -> T:
     primitives = _PRIMITIVE_TYPES
 
     resolver: Callable[[str], Any] | None = None
+    ctx_resolver: Callable[[str], Any] | None = context.__getitem__ if context is not None else None
 
     for field_name in fields:
         raw_value = _obj_ga(instance, field_name)
@@ -1035,7 +1088,13 @@ def validate(instance: T) -> T:
                 if blueprint is not None:
                     if resolver is None:
                         resolver = _make_resolver(instance)
-                    constraint_to_validate = _execute_blueprint(constraint_obj, blueprint, resolver)
+                    try:
+                        constraint_to_validate = _execute_blueprint(constraint_obj, blueprint, resolver, ctx_resolver)
+                    except ValidationError as e:
+                        for error_dict in e.errors:
+                            error_dict["field"] = f"{field_name}{error_dict.get('field', '')}"
+                            errors.append(error_dict)
+                        continue
                     # Cloned constraints have ephemeral ids — bypass cache to avoid leak.
                     fn = getattr(constraint_to_validate, "_validate_inner", None) or constraint_to_validate.validate
                 else:
@@ -1052,11 +1111,11 @@ def validate(instance: T) -> T:
                     errors.append({"field": field_name, "message": msg, "code": error_code})
 
             if type(value) not in primitives:
-                _recurse(value, field_name, errors)
+                _recurse(value, field_name, errors, context)
         else:
             value = unwrap(raw_value)
             if type(value) not in primitives:
-                _recurse(value, field_name, errors)
+                _recurse(value, field_name, errors, context)
 
     if not errors and _obj_ga(type(instance), "__monk_has_validate_hook__"):
         hook = getattr(instance, "__monk_validate__", None)
@@ -1069,7 +1128,10 @@ def validate(instance: T) -> T:
             # final aggregated result still has errors.
             _obj_sa(instance, "__monk_safe__", True)
             try:
-                result = hook()
+                if _obj_ga(type(instance), "__monk_validate_wants_ctx__"):
+                    result = hook(context)
+                else:
+                    result = hook()
                 _process_monk_validate_result(result, errors)
             except BaseException:
                 _obj_sa(instance, "__monk_safe__", False)

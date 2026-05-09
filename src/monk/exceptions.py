@@ -11,6 +11,19 @@ class UnvalidatedAccessError(Exception):
     pass
 
 
+class MissingContextError(Exception):
+    """
+    Raised when a constraint references ``Ctx(...)`` but ``validate()`` /
+    ``validate_dict()`` was called without a ``context=`` argument.
+
+    Note: a missing *key* inside a provided context is reported through the
+    normal ``ValidationError`` aggregation, not this exception. This is
+    reserved for the programmer error of forgetting to pass context entirely.
+    """
+
+    pass
+
+
 class ValidationError(Exception):
     errors: list[ErrorDict]
 

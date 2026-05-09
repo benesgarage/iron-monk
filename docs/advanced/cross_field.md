@@ -9,6 +9,8 @@ Some rules cannot live on a single field — they only make sense relative to si
 
 You can use either or both. They run in a defined order (Refs first, then `__monk_validate__`) and aggregate into the same `ValidationError`.
 
+> If the value you need is **not on the model** — current user, tenant config, clock, feature flag — reach for **[`Ctx`](context.md)** instead. It is the same machinery as `Ref`, but the value is supplied at the call site rather than read from a sibling.
+
 ---
 
 ## `Ref` — Declarative Cross-Field Rules

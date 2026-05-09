@@ -71,6 +71,7 @@ nav:
   - Advanced:
       - advanced/index.md
       - Cross-Field Validation: advanced/cross_field.md
+      - Context-Aware Validation: advanced/context.md
       - Customization: advanced/customization.md
       - Execution Models: advanced/execution.md
       - Settings & Type Metadata: advanced/settings.md
