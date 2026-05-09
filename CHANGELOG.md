@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.1]
+
+### Performance
+- **Cold-start optimization:** Moved 5 stdlib imports (`uuid`, `json`, `ipaddress`, `pathlib`, `urllib.parse`) from module-level in constraints.py into the `validate()` methods of constraints that use them, so importing `monk.constraints` no longer drags them in unless those specific constraints fire.
+
+### Maintenance
+- **Redundant lock-file:** Removed mistakenly added `poetry.lock` 
+
 ## [0.26.0]
 
 ### Added

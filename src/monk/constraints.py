@@ -1,14 +1,9 @@
 import datetime
-import ipaddress
-import json
 import math
 import re
-import uuid
 from collections.abc import Iterable, Sized, Iterator
 from dataclasses import field
 from typing import Any, Callable, Annotated, cast
-from urllib.parse import urlparse
-import pathlib
 
 from .protocols import MonkConstraint, SupportsGt, SupportsGe, SupportsLt, SupportsLe, SupportsMod
 from .decorators import constraint
@@ -727,6 +722,8 @@ class UUID:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
+        import uuid
+
         if isinstance(value, uuid.UUID):
             return
         try:
@@ -759,6 +756,8 @@ class URL:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
+        from urllib.parse import urlparse
+
         try:
             result = urlparse(str(value))
             if not all([result.scheme, result.netloc]):
@@ -775,6 +774,8 @@ class IPAddress:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
+        import ipaddress
+
         if isinstance(value, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
             return
         try:
@@ -791,6 +792,8 @@ class IsDir:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
+        import pathlib
+
         try:
             if not pathlib.Path(value).is_dir():
                 raise ValueError("Must be an existing directory.")
@@ -806,6 +809,8 @@ class IsFile:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
+        import pathlib
+
         try:
             if not pathlib.Path(value).is_file():
                 raise ValueError("Must be an existing file.")
@@ -871,6 +876,8 @@ class JSON:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
+        import json
+
         if not isinstance(value, str):
             raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as JSON.")
         try:

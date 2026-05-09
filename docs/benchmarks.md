@@ -4,27 +4,27 @@
 
 ## Methodology
 
-Benchmarks were run on **Python 3.13, Apple M2 Max**, in an isolated virtual environment. Most scenarios execute 100,000 validations against a small primitive schema (string length + integer interval) so framework overhead is what is being measured, not user code. The `Large List` row uses 10,000 iterations over 1,000-item lists to isolate per-item dispatch cost; `Guard Access` runs 1,000,000 attribute reads to isolate the validated-instance read path.
+Benchmarks were run on **Python 3.14.4, Apple M2 Max**, in an isolated virtual environment. Most scenarios execute 100,000 validations against a small primitive schema (string length + integer interval) so framework overhead is what is being measured, not user code. The `Large List` row uses 10,000 iterations over 1,000-item lists to isolate per-item dispatch cost; `Guard Access` runs 1,000,000 attribute reads to isolate the validated-instance read path.
 
 The full script lives at [`support/benchmark.py`](https://github.com/benesgarage/iron-monk/blob/main/support/benchmark.py).
 
 ## Results
 
-| Metric | `iron-monk` *(0.25.0)* | `msgspec` *(0.21.1)* | `pydantic` *(2.13.4)* | `attrs` *(26.1.0)* | `marshmallow` *(4.3.0)* |
+| Metric | `iron-monk` *(0.26.0)* | `msgspec` *(0.21.1)* | `pydantic` *(2.13.4)* | `attrs` *(26.1.0)* | `marshmallow` *(4.3.0)* |
 | --- | --- | --- | --- | --- | --- |
 | **Package Size** | `0.10 MB` | `0.44 MB` | `5.88 MB` | `0.21 MB` | `0.17 MB` |
-| **Cold Start** | `41.55ms` | `44.61ms` | `65.98ms` | `43.86ms` | `66.48ms` |
-| **Object (100k)** | `0.132s` | `0.013s` | `0.053s` | `0.085s` | N/A |
-| **Dict (100k)** | `0.092s` | `0.059s` | `0.052s` | N/A | `0.452s` |
-| **Nested Dict (100k)** | `0.327s` | `0.072s` | `0.056s` | N/A | `1.444s` |
-| **Invalid Dict (100k)** | `0.246s` | `0.084s` | `0.079s` | N/A | `1.045s` |
-| **Sanitized Dict (100k)** | `0.103s` | `0.060s` | `0.052s` | N/A | `0.429s` |
-| **Partial Dict (100k)** | `0.065s` | N/A | N/A | N/A | `0.275s` |
-| **Union Dict (100k)** | `0.120s` | `0.058s` | `0.033s` | N/A | N/A |
-| **Large List (10k × 1k items)** | `1.108s` | `0.057s` | `0.184s` | N/A | N/A |
-| **Refs / Cross-Field (100k)** | `0.247s` | N/A | N/A | N/A | N/A |
-| **Guard Access (1M attr reads)** | `0.263s` *(plain dataclass: `0.025s`)* | N/A | N/A | N/A | N/A |
-| **Function Call (100k)** | `0.176s` | N/A | `0.052s` | N/A | N/A |
+| **Cold Start** | `39.46ms` | `43.40ms` | `75.17ms` | `50.59ms` | `61.94ms` |
+| **Object (100k)** | `0.158s` | `0.013s` | `0.054s` | `0.086s` | N/A |
+| **Dict (100k)** | `0.095s` | `0.058s` | `0.051s` | N/A | `0.440s` |
+| **Nested Dict (100k)** | `0.324s` | `0.071s` | `0.056s` | N/A | `1.403s` |
+| **Invalid Dict (100k)** | `0.235s` | `0.082s` | `0.075s` | N/A | `1.017s` |
+| **Sanitized Dict (100k)** | `0.104s` | `0.060s` | `0.050s` | N/A | `0.429s` |
+| **Partial Dict (100k)** | `0.065s` | N/A | N/A | N/A | `0.267s` |
+| **Union Dict (100k)** | `0.119s` | `0.056s` | `0.033s` | N/A | N/A |
+| **Large List (10k × 1k items)** | `1.085s` | `0.056s` | `0.185s` | N/A | N/A |
+| **Refs / Cross-Field (100k)** | `0.235s` | N/A | N/A | N/A | N/A |
+| **Guard Access (1M attr reads)** | `0.257s` *(plain dataclass: `0.025s`)* | N/A | N/A | N/A | N/A |
+| **Function Call (100k)** | `0.171s` | N/A | `0.050s` | N/A | N/A |
 
 ---
 
@@ -55,7 +55,7 @@ The benchmark script is reproducible. Run it inside a fresh virtual environment 
 ```bash
 mkdir monk_benchmarks && cd monk_benchmarks
 uv init
-uv python pin 3.13
+uv python pin 3.14
 
 uv add iron-monk msgspec pydantic attrs marshmallow
 
