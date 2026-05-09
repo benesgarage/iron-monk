@@ -89,13 +89,16 @@ class DivisibleBy:
 
 ## The Toolkit
 
-A comprehensive suite of built-in constraints — including the kind of complex strings most libraries punt on:
+A comprehensive suite of 60+ built-in constraints — including the kind most libraries punt on:
 
 - **`CSV`** — validate comma-separated strings in place, no list allocation
 - **`Cron`** — POSIX and AWS EventBridge scheduling strings
-- **`JWT`** — structural JWT shape check before passing to a crypto library
-- **`JSON`** — verify a string is parsable JSON without mutating it into a dict
+- **`Hash` / `CreditCard` / `ISBN`** — checksum-verified identifiers, zero third-party deps
+- **`Ref` + `When` / `Switch`** — declarative cross-field validation that resolves at runtime
+- **PATCH semantics** — `validate_dict(payload, Schema, partial=True)` for incremental updates
 - **`Not` / `AnyOf` / `AllOf`** — invert and compose any constraint into richer rules
+
+Plus the usual suspects (`Email`, `URL`, `UUID`, `JWT`, `Slug`, `IPAddress`, …) and string/numeric/datetime/path guards.
 
 👉 [**Browse the full catalog &rarr;**](https://benesgarage.github.io/iron-monk/constraints/)
 

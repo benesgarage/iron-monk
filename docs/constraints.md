@@ -189,14 +189,22 @@ Constraints are grouped by data domain. Within each group, entries are alphabeti
 avatar: Annotated[str, EndsWith(".png")]
 ```
 
-#### `IsAlnum` · `IsAlpha` · `IsAscii` · `IsDigit` · `LowerCase` · `UpperCase`
-
-Predicate-backed string property checks. No constructor — use the bare instance.
+#### `HexString`
+`HexString(length=None, *, message=None, code=None)` — value contains only hexadecimal characters. If `length` is set, the string must match it exactly.
 
 ```python
-from monk.constraints import LowerCase, IsDigit
-slug: Annotated[str, LowerCase]
-pin:  Annotated[str, IsDigit]
+session_token: Annotated[str, HexString(length=64)]
+```
+
+#### `IsAlnum` · `IsAlpha` · `IsAscii` · `IsDigit` · `LowerCase` · `Printable` · `UpperCase`
+
+Predicate-backed string property checks. No constructor — use the bare instance. `Printable` rejects control characters (`\x00-\x1f`, `\x7f`); empty strings pass.
+
+```python
+from monk.constraints import LowerCase, IsDigit, Printable
+slug:        Annotated[str, LowerCase]
+pin:         Annotated[str, IsDigit]
+display:     Annotated[str, Printable]
 ```
 
 #### `Match`
@@ -204,6 +212,34 @@ pin:  Annotated[str, IsDigit]
 
 ```python
 sku: Annotated[str, Match(r"^PROD-\d+$")]
+```
+
+#### `MaxBytes`
+`MaxBytes(max_bytes, *, message=None, code=None)` — UTF-8 encoded length must not exceed `max_bytes`. Use this for database column limits and API payload guards where character count diverges from byte count (CJK, emoji, accented Latin).
+
+```python
+bio: Annotated[str, MaxBytes(280)]
+```
+
+#### `NoWhitespace`
+`NoWhitespace(*, message=None, code=None)` — rejects strings containing any whitespace character (space, tab, newline, etc.).
+
+```python
+username: Annotated[str, NoWhitespace]
+```
+
+#### `PathSafe`
+`PathSafe(*, message=None, code=None)` — filename hardening: rejects path separators (`/`, `\`), null bytes, parent refs (`..`), the literal `.`/`..` filenames, and empty strings. Use for user-uploaded filenames, S3 key segments, traversal prevention.
+
+```python
+upload_name: Annotated[str, PathSafe]
+```
+
+#### `SingleLine`
+`SingleLine(*, message=None, code=None)` — rejects strings containing `\n` or `\r`. Tabs and other whitespace are allowed.
+
+```python
+log_message: Annotated[str, SingleLine]
 ```
 
 #### `StartsWith`
@@ -229,6 +265,20 @@ Format-style string validators that check structural correctness only. They neve
 #### `Base64`
 `Base64(*, message=None, code=None)` — structurally validates a Base64 string.
 
+#### `DataURI`
+`DataURI(*, message=None, code=None)` — RFC 2397 data URI (e.g., `data:image/png;base64,iVBOR...`). Structural only; does not decode the payload.
+
+```python
+embedded_image: Annotated[str, DataURI]
+```
+
+#### `CreditCard`
+`CreditCard(*, message=None, code=None)` — 13-19 digit string passing the Luhn checksum. Spaces and dashes are tolerated. Structural only — no issuer/network check.
+
+```python
+card_number: Annotated[str, CreditCard]
+```
+
 #### `Email`
 `Email(*, message=None, code=None)` — RFC-style structural email check.
 
@@ -236,11 +286,39 @@ Format-style string validators that check structural correctness only. They neve
 email: Annotated[str, Email]
 ```
 
+#### `Hash`
+`Hash(algorithm, *, message=None, code=None)` — hex digest of fixed length per algorithm. Supported: `md5`, `sha1`, `sha224`, `sha256`, `sha384`, `sha512`, `blake2s`, `blake2b`. Algorithm name is case-insensitive.
+
+```python
+content_sha256: Annotated[str, Hash("sha256")]
+```
+
 #### `HexColor`
 `HexColor(*, message=None, code=None)` — `#RGB`, `#RGBA`, `#RRGGBB`, or `#RRGGBBAA`.
 
+#### `Hostname`
+`Hostname(*, message=None, code=None)` — RFC 1123 hostname: each label 1-63 chars (alphanum + hyphen, no leading/trailing hyphen), total ≤253 chars. Single-label hostnames like `localhost` pass.
+
+```python
+host: Annotated[str, Hostname]
+```
+
+#### `HttpURL`
+`HttpURL(*, message=None, code=None)` — URL restricted to the `http` or `https` scheme. Use this when you specifically want to reject `ftp://`, `file://`, `javascript:`, etc.
+
+```python
+webhook_url: Annotated[str, HttpURL]
+```
+
 #### `IPAddress`
 `IPAddress(*, message=None, code=None)` — IPv4 or IPv6.
+
+#### `ISBN`
+`ISBN(*, message=None, code=None)` — ISBN-10 or ISBN-13 with checksum verification. Spaces and dashes are tolerated; the trailing `X` check character is accepted for ISBN-10.
+
+```python
+book_isbn: Annotated[str, ISBN]
+```
 
 #### `IsISO8601`
 `IsISO8601(*, message=None, code=None)` — ISO 8601 date or datetime string. **Does not coerce** to a `datetime`.
@@ -254,11 +332,46 @@ email: Annotated[str, Email]
 #### `MacAddress`
 `MacAddress(*, message=None, code=None)` — `00:1A:2B:3C:4D:5E` or `-` separator.
 
+#### `MimeType`
+`MimeType(*, message=None, code=None)` — RFC 6838 `type/subtype` with optional `; param=value` parameters.
+
+```python
+content_type: Annotated[str, MimeType]
+```
+
+#### `PEMBlock`
+`PEMBlock(*, message=None, code=None)` — structurally validates a PEM-encoded block (X.509 cert, RSA/SSH key, etc.). Verifies the `-----BEGIN <LABEL>-----` / `-----END <LABEL>-----` envelope matches and the body contains Base64 content. **Performs no cryptographic verification** — use a crypto library for that.
+
+```python
+cert: Annotated[str, PEMBlock]
+```
+
+#### `PhoneE164`
+`PhoneE164(*, message=None, code=None)` — structural [E.164](https://en.wikipedia.org/wiki/E.164) phone number: leading `+`, 1-15 digits, no separators. Structural only — no carrier/region lookup.
+
+```python
+phone: Annotated[str, PhoneE164]
+```
+
 #### `SemVer`
 `SemVer(*, message=None, code=None)` — Semantic Versioning string.
 
 #### `Slug`
 `Slug(*, message=None, code=None)` — URL-safe slug (lowercase alphanumerics and hyphens).
+
+#### `TimeOfDay`
+`TimeOfDay(*, message=None, code=None)` — 24-hour `HH:MM` or `HH:MM:SS` time string. Does not validate full datetimes — see `IsISO8601` for that.
+
+```python
+opening_hour: Annotated[str, TimeOfDay]
+```
+
+#### `TimezoneName`
+`TimezoneName(*, message=None, code=None)` — IANA timezone name (e.g., `America/New_York`, `Europe/Berlin`, `UTC`). Resolved via `zoneinfo.ZoneInfo`; `zoneinfo` is imported lazily.
+
+```python
+display_tz: Annotated[str, TimezoneName]
+```
 
 #### `URL`
 `URL(*, message=None, code=None)` — scheme + netloc check.
@@ -274,6 +387,22 @@ node_id: Annotated[str | uuid.UUID, UUID]
 ---
 
 ### Numeric
+
+#### `DecimalPlaces`
+`DecimalPlaces(max_places, *, message=None, code=None)` — caps the digits after the decimal point. Accepts `int`, `float`, `decimal.Decimal`, and numeric strings. Trailing zeros count as places (so `Decimal("1.50")` reports 2 places).
+
+```python
+price: Annotated[Decimal, DecimalPlaces(max_places=2)]
+```
+
+#### `Even` · `Odd`
+
+Integer parity checks. Reject `bool` and non-integer numerics.
+
+```python
+batch: Annotated[int, Even]
+seat:  Annotated[int, Odd]
+```
 
 #### `Interval`
 `Interval(*, gt=None, ge=None, lt=None, le=None, message=None, code=None)` — comparable bounds. Any combination of bounds is valid. All bounds accept `Ref`.
@@ -297,12 +426,21 @@ ratio: Annotated[float, IsFinite]
 pack_size: Annotated[int, MultipleOf(5)]
 ```
 
-#### `NonNegative`
+#### `NonNegative` · `Positive` · `Negative`
 
-Pre-instantiated alias for `Interval(ge=0)`. Use bare.
+Pre-instantiated `Interval` shortcuts: `ge=0`, `gt=0`, and `lt=0` respectively. Use bare.
 
 ```python
-score: Annotated[int, NonNegative]
+score:   Annotated[int, NonNegative]
+amount:  Annotated[float, Positive]
+delta:   Annotated[float, Negative]
+```
+
+#### `NonZero`
+`NonZero(*, message=None, code=None)` — rejects values equal to zero. Works with any numeric that supports `==`.
+
+```python
+divisor: Annotated[float, NonZero]
 ```
 
 #### `Port`
@@ -310,6 +448,13 @@ score: Annotated[int, NonNegative]
 
 ```python
 db_port: Annotated[int, Port]
+```
+
+#### `PowerOfTwo`
+`PowerOfTwo(*, message=None, code=None)` — positive integer that is a power of two (1, 2, 4, 8, 16, …). Common for ML batch sizes, ring buffers, and cache-aligned allocations.
+
+```python
+batch_size: Annotated[int, PowerOfTwo]
 ```
 
 ---
@@ -326,6 +471,17 @@ status: Annotated[str, Eq("active")]
 #### `OneOf`
 `OneOf(choices, *, message=None, code=None)` — value must be a member of `choices`. Accepts `Ref`.
 
+When `choices` is an `enum.Enum` subclass, `OneOf` accepts both member instances **and** their underlying values:
+
+```python
+class Role(enum.Enum):
+    ADMIN  = "admin"
+    EDITOR = "editor"
+
+# Either Role.ADMIN or "admin" passes.
+role: Annotated[str | Role, OneOf(Role)]
+```
+
 ```python
 role: Annotated[str, OneOf(["admin", "editor", "viewer"])]
 ```
@@ -333,6 +489,13 @@ role: Annotated[str, OneOf(["admin", "editor", "viewer"])]
 ---
 
 ### Collections
+
+#### `AllEqual`
+`AllEqual(*, message=None, code=None)` — every element in the iterable must equal the others. Empty iterables pass. Rejects exhaustible iterators.
+
+```python
+all_same: Annotated[list[int], AllEqual]
+```
 
 #### `Contains`
 `Contains(item, *, message=None, code=None)` — collection or string must contain `item` / substring. Accepts `Ref`.
@@ -373,11 +536,29 @@ tags: Annotated[list[str], Len(min_len=1, max_len=10)]
 #### `Nested`
 `Nested(schema, partial=False, *, message=None, code=None)` — validates a raw dict against another `TypedDict` / `@monk` class. Use `partial=True` for PATCH-style payloads.
 
+#### `NonEmpty`
+
+Pre-instantiated alias for `Len(min_len=1)`. Works on any sized container (string, list, dict, set, tuple). Use bare.
+
+```python
+tags: Annotated[list[str], NonEmpty]
+name: Annotated[str, NonEmpty]
+```
+
+
 ```python
 class AddressDict(TypedDict):
     city: str
 
 address: Annotated[AddressDict, Nested(AddressDict)]
+```
+
+#### `Sorted`
+`Sorted(reverse=False, *, message=None, code=None)` — iterable items must be in non-decreasing order (or non-increasing when `reverse=True`). Equal neighbors are allowed. Rejects exhaustible iterators — convert to a `list`/`tuple` first.
+
+```python
+timestamps: Annotated[list[int], Sorted]
+leaderboard: Annotated[list[int], Sorted(reverse=True)]
 ```
 
 #### `Subset`
@@ -400,6 +581,15 @@ matrix: Annotated[list[list[int]], Unique]
 
 #### `Future`
 `Future(*, message=None, code=None)` — `datetime` / `date` strictly in the future.
+
+#### `IsTzAware` · `IsTzNaive`
+
+Predicate-backed timezone-awareness checks for `datetime` instances. `IsTzAware` requires `tzinfo` set to any zone (use `IsUTC` to require UTC specifically); `IsTzNaive` requires no `tzinfo`.
+
+```python
+expires_at: Annotated[datetime.datetime, IsTzAware]
+local_time: Annotated[datetime.datetime, IsTzNaive]
+```
 
 #### `IsUTC`
 
@@ -475,12 +665,12 @@ The `MonkConstraint` protocol is one method. Use `@constraint` to define your ow
 from monk import constraint
 
 @constraint
-class Even:
+class StartsWithVowel:
     message: str | None = None
 
-    def validate(self, value: int) -> None:
-        if value % 2 != 0:
-            raise ValueError("Must be even.")
+    def validate(self, value: str) -> None:
+        if not value or value[0].lower() not in "aeiou":
+            raise ValueError("Must start with a vowel.")
 ```
 
 Full guide: **[Customization](advanced/customization.md)**.

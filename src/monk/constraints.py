@@ -357,6 +357,8 @@ IsFinite = Predicate(math.isfinite)
 IsNan = Predicate(math.isnan)
 IsInfinite = Predicate(math.isinf)
 NonNegative = Interval(ge=0)
+Positive = Interval(gt=0)
+Negative = Interval(lt=0)
 
 
 def _is_utc(dt: datetime.datetime) -> bool:
@@ -364,6 +366,18 @@ def _is_utc(dt: datetime.datetime) -> bool:
 
 
 IsUTC = Predicate(_is_utc)
+
+
+def _is_tz_aware(dt: Any) -> bool:
+    return isinstance(dt, datetime.datetime) and dt.tzinfo is not None and dt.utcoffset() is not None
+
+
+def _is_tz_naive(dt: Any) -> bool:
+    return isinstance(dt, datetime.datetime) and (dt.tzinfo is None or dt.utcoffset() is None)
+
+
+IsTzAware = Predicate(_is_tz_aware)
+IsTzNaive = Predicate(_is_tz_naive)
 
 
 @constraint
@@ -394,6 +408,9 @@ class Len:
             raise ValueError(f"Must have a minimum length of {min_len}.")
         if max_len is not None and length > max_len:
             raise ValueError(f"Must have a maximum length of {max_len}.")
+
+
+NonEmpty = Len(min_len=1)
 
 
 @constraint
@@ -447,8 +464,18 @@ class OneOf:
 
     def __post_init__(self) -> None:
         if not isinstance(self.choices, Ref):
-            # Always convert to tuple so the constraint is immutable and hashable (for tyro/FastAPI caching)
-            object.__setattr__(self, "choices", tuple(self.choices))
+            import enum
+
+            raw = self.choices
+            if isinstance(raw, type) and issubclass(raw, enum.Enum):
+                # Accept either the Enum member itself or its underlying value.
+                members = list(raw)
+                expanded: list[Any] = list(members)
+                expanded.extend(m.value for m in members)
+                object.__setattr__(self, "choices", tuple(expanded))
+            else:
+                # Always convert to tuple so the constraint is immutable and hashable (for tyro/FastAPI caching)
+                object.__setattr__(self, "choices", tuple(raw))
             if not self.choices:
                 raise ValueError("OneOf requires at least one choice.")
 
@@ -1266,3 +1293,513 @@ class DictOf:
 
         if errors:
             raise ValidationError(errors)
+
+
+@constraint
+class PhoneE164:
+    """Validates a phone number in E.164 structural format (e.g., +14155552671)."""
+
+    _regex = re.compile(r"^\+[1-9]\d{1,14}\Z")
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        try:
+            if not self._regex.match(value):
+                raise ValueError("Must be a valid E.164 phone number (e.g., +14155552671).")
+        except TypeError:
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a phone number.")
+
+
+@constraint
+class MimeType:
+    """Validates a MIME type per RFC 6838 (e.g., application/json, text/html; charset=utf-8)."""
+
+    _regex = re.compile(
+        r"^[a-zA-Z0-9!#$&^_.+-]+/[a-zA-Z0-9!#$&^_.+-]+"
+        r"(\s*;\s*[a-zA-Z0-9!#$&^_.+-]+=(\"[^\"]*\"|[a-zA-Z0-9!#$&^_.+-]+))*\Z"
+    )
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        try:
+            if not self._regex.match(value):
+                raise ValueError("Must be a valid MIME type (e.g., 'application/json').")
+        except TypeError:
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a MIME type.")
+
+
+_HASH_LENGTHS: dict[str, int] = {
+    "md5": 32,
+    "sha1": 40,
+    "sha224": 56,
+    "sha256": 64,
+    "sha384": 96,
+    "sha512": 128,
+    "blake2s": 64,
+    "blake2b": 128,
+}
+_HEX_REGEX = re.compile(r"^[0-9a-fA-F]+\Z")
+
+
+@constraint
+class Hash:
+    """Validates a hex-encoded hash digest of fixed length per algorithm.
+
+    Supported algorithms: md5, sha1, sha224, sha256, sha384, sha512, blake2s, blake2b.
+    """
+
+    algorithm: str
+    message: str | None = None
+    code: str | None = None
+
+    def __post_init__(self) -> None:
+        algo = self.algorithm.lower()
+        if algo not in _HASH_LENGTHS:
+            raise ValueError(
+                f"Unsupported hash algorithm '{self.algorithm}'. Expected one of: {', '.join(sorted(_HASH_LENGTHS))}."
+            )
+        object.__setattr__(self, "algorithm", algo)
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a hash digest.")
+        expected = _HASH_LENGTHS[self.algorithm]
+        if len(value) != expected or not _HEX_REGEX.match(value):
+            raise ValueError(f"Must be a valid {self.algorithm} hex digest of length {expected}.")
+
+
+@constraint
+class CreditCard:
+    """Validates a credit card number using Luhn checksum and length 13-19."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a credit card.")
+        digits_str = value.replace(" ", "").replace("-", "")
+        if not digits_str.isdigit() or not (13 <= len(digits_str) <= 19):
+            raise ValueError("Must be a 13-19 digit credit card number.")
+        checksum = 0
+        for i, ch in enumerate(reversed(digits_str)):
+            d = int(ch)
+            if i % 2 == 1:
+                d *= 2
+                if d > 9:
+                    d -= 9
+            checksum += d
+        if checksum % 10 != 0:
+            raise ValueError("Must be a valid credit card number (Luhn checksum failed).")
+
+
+@constraint
+class ISBN:
+    """Validates ISBN-10 or ISBN-13 with checksum verification."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as an ISBN.")
+        cleaned = value.replace("-", "").replace(" ", "").upper()
+        if len(cleaned) == 10:
+            if not (cleaned[:9].isdigit() and (cleaned[9].isdigit() or cleaned[9] == "X")):
+                raise ValueError("Must be a valid ISBN-10.")
+            total = sum((10 - i) * (10 if c == "X" else int(c)) for i, c in enumerate(cleaned))
+            if total % 11 != 0:
+                raise ValueError("Must be a valid ISBN-10 (checksum failed).")
+        elif len(cleaned) == 13:
+            if not cleaned.isdigit():
+                raise ValueError("Must be a valid ISBN-13.")
+            total = sum(int(c) * (1 if i % 2 == 0 else 3) for i, c in enumerate(cleaned[:12]))
+            check = (10 - total % 10) % 10
+            if check != int(cleaned[12]):
+                raise ValueError("Must be a valid ISBN-13 (checksum failed).")
+        else:
+            raise ValueError("Must be a valid ISBN-10 or ISBN-13.")
+
+
+def _is_real_int(v: Any) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+@constraint
+class NonZero:
+    """Validates that a numeric value is not zero."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        try:
+            if value == 0:
+                raise ValueError("Must not be zero.")
+        except TypeError:
+            raise TypeError(f"Type '{type(value).__name__}' does not support comparison to zero.")
+
+
+@constraint
+class Even:
+    """Validates that an integer is even."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not _is_real_int(value):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as even/odd.")
+        if value % 2 != 0:
+            raise ValueError("Must be an even integer.")
+
+
+@constraint
+class Odd:
+    """Validates that an integer is odd."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not _is_real_int(value):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as even/odd.")
+        if value % 2 == 0:
+            raise ValueError("Must be an odd integer.")
+
+
+@constraint
+class PowerOfTwo:
+    """Validates that a positive integer is a power of two (1, 2, 4, 8, ...)."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not _is_real_int(value):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as a power of two.")
+        if value <= 0 or (value & (value - 1)) != 0:
+            raise ValueError("Must be a positive power of two.")
+
+
+@constraint
+class HexString:
+    """Validates that a string contains only hex characters (optionally of a fixed length)."""
+
+    length: int | None = None
+    message: str | None = None
+    code: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.length is not None and self.length < 1:
+            raise ValueError("length must be a positive integer.")
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a hex string.")
+        if not _HEX_REGEX.match(value):
+            raise ValueError("Must contain only hexadecimal characters.")
+        if self.length is not None and len(value) != self.length:
+            raise ValueError(f"Must be exactly {self.length} hex characters.")
+
+
+@constraint
+class TimezoneName:
+    """Validates that a string is a valid IANA timezone name (e.g., 'America/New_York')."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a timezone name.")
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("Must be a valid IANA timezone name.")
+
+
+@constraint
+class Sorted:
+    """Validates that an iterable is sorted (ascending by default, descending if reverse=True)."""
+
+    reverse: bool = False
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if isinstance(value, Iterator):
+            raise TypeError(
+                f"Cannot eagerly validate exhaustible iterator '{type(value).__name__}'. "
+                f"Use 'validate_stream()' for lazy validation, or convert to a list/tuple first."
+            )
+        if not isinstance(value, Iterable):
+            raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
+        items = list(value)
+        try:
+            if self.reverse:
+                for i in range(len(items) - 1):
+                    if items[i] < items[i + 1]:
+                        raise ValueError("Must be sorted in descending order.")
+            else:
+                for i in range(len(items) - 1):
+                    if items[i] > items[i + 1]:
+                        raise ValueError("Must be sorted in ascending order.")
+        except TypeError:
+            raise TypeError("Items in iterable do not support comparison.")
+
+
+@constraint
+class NoWhitespace:
+    """Validates that a string contains no whitespace characters."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated for whitespace.")
+        if any(c.isspace() for c in value):
+            raise ValueError("Must not contain any whitespace characters.")
+
+
+@constraint
+class SingleLine:
+    """Validates that a string contains no newline or carriage-return characters."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as a single-line string.")
+        if "\n" in value or "\r" in value:
+            raise ValueError("Must not contain newline characters.")
+
+
+Printable = Predicate(str.isprintable)
+
+
+@constraint
+class MaxBytes:
+    """Validates that a string's UTF-8 encoded length is at most `max_bytes`.
+
+    Useful for database column limits and API payload guards where char count diverges from byte count
+    for multibyte characters (CJK, emoji, accented Latin).
+    """
+
+    max_bytes: int
+    message: str | None = None
+    code: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_bytes < 1:
+            raise ValueError("max_bytes must be a positive integer.")
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated for byte length.")
+        if len(value.encode("utf-8")) > self.max_bytes:
+            raise ValueError(f"Must encode to at most {self.max_bytes} UTF-8 bytes.")
+
+
+@constraint
+class PathSafe:
+    """Validates a filename: no path separators, no `..` segments, no null bytes, not empty, not `.`/`..`."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as a filename.")
+        if not value:
+            raise ValueError("Filename must not be empty.")
+        if value in (".", ".."):
+            raise ValueError("Filename must not be '.' or '..'.")
+        if "/" in value or "\\" in value:
+            raise ValueError("Filename must not contain path separators.")
+        if "\x00" in value:
+            raise ValueError("Filename must not contain null bytes.")
+
+
+_HOSTNAME_REGEX = re.compile(
+    r"^(?=.{1,253}\Z)([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)"
+    r"(?:\.(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?))*\Z"
+)
+
+
+@constraint
+class Hostname:
+    """Validates an RFC 1123 hostname (labels 1-63 chars, alphanum + hyphen, total ≤253)."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a hostname.")
+        if not _HOSTNAME_REGEX.match(value):
+            raise ValueError("Must be a valid RFC 1123 hostname.")
+
+
+@constraint
+class HttpURL:
+    """Validates a URL restricted to the http or https scheme."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        from urllib.parse import urlparse
+
+        try:
+            result = urlparse(str(value))
+        except Exception:
+            raise ValueError("Must be a valid HTTP(S) URL.")
+        if result.scheme not in ("http", "https") or not result.netloc:
+            raise ValueError("Must be an http:// or https:// URL.")
+
+
+_DATA_URI_REGEX = re.compile(
+    r"^data:"
+    r"([a-zA-Z0-9!#$&^_.+-]+/[a-zA-Z0-9!#$&^_.+-]+)?"
+    r"(;[a-zA-Z0-9!#$&^_.+-]+=[a-zA-Z0-9!#$&^_.+-]+)*"
+    r"(;base64)?,.*\Z",
+    re.DOTALL,
+)
+
+
+@constraint
+class DataURI:
+    """Validates a data URI per RFC 2397 (e.g., `data:image/png;base64,iVBORw0...`)."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a data URI.")
+        if not _DATA_URI_REGEX.match(value):
+            raise ValueError("Must be a valid data URI (e.g., 'data:image/png;base64,...').")
+
+
+_TIME_OF_DAY_REGEX = re.compile(r"^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?\Z")
+
+
+@constraint
+class TimeOfDay:
+    """Validates a 24-hour time-of-day string in `HH:MM` or `HH:MM:SS` format."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a time of day.")
+        if not _TIME_OF_DAY_REGEX.match(value):
+            raise ValueError("Must be a valid 24-hour time of day (HH:MM or HH:MM:SS).")
+
+
+@constraint
+class DecimalPlaces:
+    """Validates that a numeric or numeric-string has at most `max_places` digits after the decimal point.
+
+    Accepts `int`, `float`, `decimal.Decimal`, or a numeric string. Trailing zeros count as places
+    (so `Decimal("1.50")` has 2 places).
+    """
+
+    max_places: int
+    message: str | None = None
+    code: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_places < 0:
+            raise ValueError("max_places must be non-negative.")
+
+    def validate(self, value: Any) -> None:
+        from decimal import Decimal
+
+        if isinstance(value, bool):
+            raise TypeError("Boolean values cannot be evaluated as decimals.")
+        if isinstance(value, Decimal):
+            exp = value.as_tuple().exponent
+            places = -exp if isinstance(exp, int) and exp < 0 else 0
+        elif isinstance(value, (int, float)):
+            s = repr(value) if isinstance(value, float) else str(value)
+            places = len(s.split(".", 1)[1]) if "." in s else 0
+        elif isinstance(value, str):
+            try:
+                Decimal(value)
+            except Exception:
+                raise ValueError("Must be a valid decimal number.")
+            cleaned = value.strip().lstrip("+-")
+            if "e" in cleaned or "E" in cleaned:
+                # Scientific notation: round-trip through Decimal for accurate place count.
+                exp = Decimal(value).normalize().as_tuple().exponent
+                places = -exp if isinstance(exp, int) and exp < 0 else 0
+            else:
+                places = len(cleaned.split(".", 1)[1]) if "." in cleaned else 0
+        else:
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated for decimal places.")
+
+        if places > self.max_places:
+            raise ValueError(f"Must have at most {self.max_places} decimal places.")
+
+
+@constraint
+class AllEqual:
+    """Validates that every element in an iterable is equal to the others. Empty iterables pass."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if isinstance(value, Iterator):
+            raise TypeError(
+                f"Cannot eagerly validate exhaustible iterator '{type(value).__name__}'. "
+                f"Use 'validate_stream()' for lazy validation, or convert to a list/tuple first."
+            )
+        if not isinstance(value, Iterable):
+            raise TypeError(f"Type '{type(value).__name__}' is not iterable.")
+        sentinel: Any = object()
+        first: Any = sentinel
+        for item in value:
+            if first is sentinel:
+                first = item
+            elif item != first:
+                raise ValueError("All elements must be equal.")
+
+
+_PEM_BLOCK_REGEX = re.compile(
+    r"^-----BEGIN ([A-Z][A-Z0-9 ]*)-----\s*"
+    r"([A-Za-z0-9+/=\s]*?)\s*"
+    r"-----END \1-----\s*\Z",
+    re.DOTALL,
+)
+
+
+@constraint
+class PEMBlock:
+    """Structurally validates a PEM-encoded block (e.g., X.509 certificate, RSA key, SSH public key).
+
+    Checks the `-----BEGIN <LABEL>-----` / `-----END <LABEL>-----` envelope and Base64 body.
+    Performs **no cryptographic verification** — use a crypto library for that.
+    """
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, str):
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a PEM block.")
+        match = _PEM_BLOCK_REGEX.match(value)
+        if not match:
+            raise ValueError("Must be a valid PEM block with matching BEGIN/END labels.")
+        body = match.group(2)
+        if not body or not any(c.isalnum() or c in "+/=" for c in body):
+            raise ValueError("PEM block body must contain at least one Base64 character.")

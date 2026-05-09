@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0]
+
+### Added
+- **String hardening constraints:** `NoWhitespace`, `SingleLine`, `Printable`, `MaxBytes` (UTF-8 byte cap, distinct from char count), `PathSafe` (filename safety: rejects path separators, parent refs, null bytes), `HexString` (optionally fixed-length).
+- **Network/identity constraints:** `Hostname` (RFC 1123), `HttpURL` (URL restricted to http/https), `DataURI` (RFC 2397), `PhoneE164` (structural E.164), `MimeType` (RFC 6838).
+- **Identifier constraints:** `Hash` (hex digest of correct length per algorithm — md5/sha1/sha224/sha256/sha384/sha512/blake2s/blake2b), `CreditCard` (Luhn-checksummed), `ISBN` (ISBN-10/13 with checksum), `PEMBlock` (structural envelope check for X.509 certs / SSH keys).
+- **Time constraints:** `TimeOfDay` (`HH:MM[:SS]`), `TimezoneName` (IANA via lazy `zoneinfo`), `IsTzAware`, `IsTzNaive`.
+- **Numeric shortcuts:** `Positive` / `Negative` (`Interval(gt=0)` / `Interval(lt=0)`), `NonZero`, `Even`, `Odd`, `PowerOfTwo`, `DecimalPlaces`.
+- **Collection constraints:** `Sorted` (ascending/descending with `reverse` flag), `AllEqual`, `NonEmpty` (`Len(min_len=1)` singleton).
+- **`OneOf` accepts `Enum` subclasses:** Passing an `Enum` class as `choices` now accepts both member instances **and** their underlying values (e.g., both `Color.RED` and `"r"` validate against `OneOf(Color)`).
+
 ## [0.26.1]
 
 ### Performance
