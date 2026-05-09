@@ -43,3 +43,6 @@ build: clean ## Build the package (sdist and wheel) for publishing
 
 docs:
 	mkdocs serve
+
+benchmark:
+	.venv/bin/pip install pydantic msgspec attrs marshmallow && .venv/bin/python support/benchmark.py

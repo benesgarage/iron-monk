@@ -6,6 +6,7 @@
 | --- | --- |
 | **Strawberry GraphQL** | [Strawberry GraphQL](strawberry.md) — `errors-as-data` for inputs, fail-fast for headers, `Maybe[T]` integration via `settings.type_metadata`. |
 | **Starlette / ASGI** | [Starlette (ASGI)](starlette.md) — RFC 7807 exception handlers, dict-mode and DTO-mode handlers. |
+| **FastAPI** | [FastAPI](fastapi.md) — `Depends` bridge for RFC 7807 errors, or Pydantic Core duck-typing to keep idiomatic handler signatures. |
 | **SQLAlchemy 2.0** | [SQLAlchemy 2.0](sqlalchemy.md) — validate ORM models before commit; `Mapped[T]` unwrapping. |
 | **Tortoise ORM** | [Tortoise ORM](tortoise_orm.md) — split DTO validation from Active Record persistence. |
 | **tyro CLI** | [tyro](tyro.md) — validate dataclass-driven CLIs alongside argument parsing. |

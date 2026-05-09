@@ -98,9 +98,19 @@ def _build_blueprint(constraint: Any) -> _RefBlueprint | None:
         except AttributeError:
             pass
 
-    # Check known nested constraint fields (like DictOf, CSV, AnyOf, Not, etc.)
+    # Check known nested constraint fields (like DictOf, CSV, AnyOf, Not, When, etc.)
     nested: dict[str, Any] = {}
-    for nested_attr in ("constraints", "_key_constraints", "_value_constraints", "_prepared", "constraint"):
+    for nested_attr in (
+        "constraints",
+        "_key_constraints",
+        "_value_constraints",
+        "_prepared",
+        "constraint",
+        "test",
+        "then",
+        "else_",
+        "default",
+    ):
         if hasattr(constraint, nested_attr):
             val = getattr(constraint, nested_attr)
             if isinstance(val, (tuple, list)):

@@ -69,6 +69,7 @@
 .md-typeset {
     font-feature-settings: "kern", "liga", "calt";
     line-height: 1.65;
+    font-size: 0.75rem; /* Drops base paragraphs/lists from 0.8rem (16px) to ~15px */
 }
 
 .md-typeset h1,
@@ -117,7 +118,7 @@
 .md-typeset code {
     border-radius: 4px;
     padding: 0.15em 0.4em;
-    font-size: 0.86em;
+    font-size: 0.69rem; /* Hardcoded rem keeps it the exact original size */
     background: var(--im-accent-soft);
     color: var(--im-accent-strong);
     border: none;
@@ -136,7 +137,7 @@
     border: none;
     padding: 1em 1.2em;
     border-radius: 0 6px 6px 0;
-    font-size: 0.85em;
+    font-size: 0.68rem; /* Hardcoded rem keeps it the exact original size */
     line-height: 1.65;
     background: var(--md-code-bg-color);
     color: var(--md-code-fg-color);
@@ -318,9 +319,10 @@
 }
 
 .hero-logo {
-    width: 180px;
+    width: 320px;
     height: auto;
-    margin-bottom: 1.5rem;
+    margin-top: -4rem;
+    margin-bottom: 0;
     filter: drop-shadow(0 8px 24px rgba(232, 85, 27, 0.20));
 }
 
@@ -397,6 +399,10 @@
 /* ========================================================================
    Sidebar nav (Material)
    ======================================================================== */
+
+.md-nav {
+    font-size: 1.1em;
+}
 
 .md-nav__link--active,
 .md-nav__link:focus,

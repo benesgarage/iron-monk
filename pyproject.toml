@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iron-monk"
-version = "0.25.1"
+version = "0.26.0"
 description = "A minimalist, zero-coercion validation library for Python."
 readme = "README.md"
 authors = [
@@ -46,7 +46,8 @@ integrations = [
     "httpx",
     "strawberry-graphql",
     "sqlalchemy",
-    "tortoise-orm"
+    "tortoise-orm",
+    "fastapi"
 ]
 
 [project.urls]

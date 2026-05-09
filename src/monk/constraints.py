@@ -25,6 +25,9 @@ class _EachFastPathFail(Exception):
     __slots__ = ()
 
 
+_SWITCH_MISSING: Any = object()
+
+
 class Ref:
     """A marker used to reference another field dynamically."""
 
@@ -159,6 +162,133 @@ class AllOf:
                 if getattr(self, "message", None) is not None:
                     raise ValueError("Failed AllOf constraint.") from e
                 raise
+
+
+@constraint
+class When:
+    """Conditional validation: applies `then` (or `else_`) based on a test against a Ref-resolved sibling field.
+
+    `field` is typically a `Ref` to another field on the same model. At validation
+    time, the blueprint compiler resolves the Ref and runs `test` against the
+    resolved value. If `test` passes, `then` is applied to the current field's
+    value; if `test` raises, `else_` (when provided) is applied instead.
+
+    Example:
+        @monk
+        class Order:
+            payment_method: str
+            cc_number: Annotated[
+                str | None,
+                When(field=Ref("payment_method"), test=Eq("credit"), then=Len(min_len=16, max_len=16)),
+            ]
+    """
+
+    field: Any
+    test: MonkConstraint | type[Any]
+    then: MonkConstraint | type[Any]
+    else_: MonkConstraint | type[Any] | None = None
+    message: str | None = None
+    code: str | None = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.test, type) and issubclass(self.test, MonkConstraint):
+            try:
+                object.__setattr__(self, "test", self.test())
+            except TypeError as e:
+                raise TypeError(
+                    f"Constraint '{self.test.__name__}' missing required arguments. Did you mean {self.test.__name__}(...)?"
+                ) from e
+        if isinstance(self.then, type) and issubclass(self.then, MonkConstraint):
+            try:
+                object.__setattr__(self, "then", self.then())
+            except TypeError as e:
+                raise TypeError(
+                    f"Constraint '{self.then.__name__}' missing required arguments. Did you mean {self.then.__name__}(...)?"
+                ) from e
+        if self.else_ is not None and isinstance(self.else_, type) and issubclass(self.else_, MonkConstraint):
+            try:
+                object.__setattr__(self, "else_", self.else_())
+            except TypeError as e:
+                raise TypeError(
+                    f"Constraint '{self.else_.__name__}' missing required arguments. Did you mean {self.else_.__name__}(...)?"
+                ) from e
+
+    def validate(self, value: Any) -> None:
+        try:
+            cast(MonkConstraint, self.test).validate(self.field)
+        except (ValueError, TypeError, ValidationError):
+            if self.else_ is not None:
+                cast(MonkConstraint, self.else_).validate(value)
+            return
+        cast(MonkConstraint, self.then).validate(value)
+
+
+@constraint
+class Switch:
+    """Branches validation by the value of a Ref-resolved sibling field.
+
+    `cases` maps discriminator values to constraints. If the resolved value of
+    `field` is a key in `cases`, that constraint is applied to the current
+    field's value. Otherwise `default` is applied if provided; if no `default`
+    is set, an unknown discriminator raises a ``ValueError``.
+
+    Example:
+        @monk
+        class Notification:
+            channel: str
+            target: Annotated[
+                str,
+                Switch(
+                    field=Ref("channel"),
+                    cases={"email": Email, "sms": Match(r"^\\+\\d+")},
+                    default=Len(min_len=1),
+                ),
+            ]
+    """
+
+    field: Any
+    cases: dict[Any, MonkConstraint | type[Any]]
+    default: MonkConstraint | type[Any] | None = None
+    message: str | None = None
+    code: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.cases:
+            raise ValueError("Switch requires at least one case.")
+
+        new_cases: dict[Any, MonkConstraint] = {}
+        for k, v in self.cases.items():
+            if isinstance(v, type) and issubclass(v, MonkConstraint):
+                try:
+                    new_cases[k] = v()
+                except TypeError as e:
+                    raise TypeError(
+                        f"Constraint '{v.__name__}' missing required arguments. Did you mean {v.__name__}(...)?"
+                    ) from e
+            else:
+                new_cases[k] = cast(MonkConstraint, v)
+        object.__setattr__(self, "cases", new_cases)
+
+        if self.default is not None and isinstance(self.default, type) and issubclass(self.default, MonkConstraint):
+            try:
+                object.__setattr__(self, "default", self.default())
+            except TypeError as e:
+                raise TypeError(
+                    f"Constraint '{self.default.__name__}' missing required arguments. Did you mean {self.default.__name__}(...)?"
+                ) from e
+
+    def validate(self, value: Any) -> None:
+        try:
+            constraint = self.cases.get(self.field, _SWITCH_MISSING)
+        except TypeError:
+            # Unhashable discriminator (e.g., dict/list). Treat as no match.
+            constraint = _SWITCH_MISSING
+        if constraint is _SWITCH_MISSING:
+            if self.default is not None:
+                self.default.validate(value)
+                return
+            raise ValueError(f"No case matches discriminator {self.field!r}.")
+        cast(MonkConstraint, constraint).validate(value)
 
 
 @constraint

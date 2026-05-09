@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0]
+
+### Added
+- **`When` Constraint:** Declarative two-branch conditional validation. `When(field=Ref("payment_method"), test=Eq("credit"), then=Len(min_len=16))` resolves the Ref, runs `test` against the sibling value, and applies `then` (or `else_`) to the current field. Reuses the existing blueprint compiler — Refs nest freely inside `test`, `then`, and `else_`.
+- **`Switch` Constraint:** Multi-branch dispatch for discriminated-union-style validation. `Switch(field=Ref("channel"), cases={"email": Email, "sms": Match(...)}, default=...)` picks the constraint mapped to the resolved discriminator. Strict by default — an unknown discriminator without a `default` fails validation, making discriminated unions structurally exhaustive.
+
 ## [0.25.1]
 
 ### Fixed

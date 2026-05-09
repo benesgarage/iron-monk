@@ -22,6 +22,8 @@ from monk.constraints import (
     ContainsKeys,
     CSV,
     DictOf,
+    When,
+    Switch,
 )
 from monk.exceptions import ValidationError
 from monk.config import settings
@@ -476,3 +478,202 @@ def test_missing_ref_attribute_on_instance() -> None:
     with pytest.raises(ValidationError) as exc:
         validate(BadRef(val=10))
     assert "Must be equal to None" in exc.value.errors[0]["message"]
+
+
+def test_when_then_branch_applies() -> None:
+    """When `test` passes against the Ref-resolved sibling, `then` applies to the field."""
+
+    @monk
+    class Order:
+        payment_method: str
+        cc_number: Annotated[
+            str, When(field=Ref("payment_method"), test=Eq("credit"), then=Len(min_len=16, max_len=16))
+        ]
+
+    # Condition met, then passes
+    validate(Order(payment_method="credit", cc_number="4111111111111111"))
+
+    # Condition met, then fails
+    with pytest.raises(ValidationError) as exc:
+        validate(Order(payment_method="credit", cc_number="123"))
+    assert "minimum length of 16" in exc.value.errors[0]["message"]
+
+
+def test_when_no_else_skips_validation() -> None:
+    """When `test` fails and no `else_` is provided, the field is not validated."""
+
+    @monk
+    class Order:
+        payment_method: str
+        cc_number: Annotated[str, When(field=Ref("payment_method"), test=Eq("credit"), then=Len(min_len=16))]
+
+    # Condition unmet, no else_ — `cc_number` value not enforced.
+    validate(Order(payment_method="cash", cc_number="anything"))
+
+
+def test_when_else_branch_applies() -> None:
+    """When `test` fails and `else_` is set, `else_` applies to the field."""
+
+    @monk
+    class Profile:
+        kind: str
+        handle: Annotated[
+            str,
+            When(field=Ref("kind"), test=Eq("admin"), then=Len(min_len=8), else_=Len(min_len=3)),
+        ]
+
+    # else_ branch
+    validate(Profile(kind="user", handle="kai"))
+    with pytest.raises(ValidationError) as exc:
+        validate(Profile(kind="user", handle="x"))
+    assert "minimum length of 3" in exc.value.errors[0]["message"]
+
+    # then branch
+    validate(Profile(kind="admin", handle="kaiadmin"))
+    with pytest.raises(ValidationError) as exc2:
+        validate(Profile(kind="admin", handle="kai"))
+    assert "minimum length of 8" in exc2.value.errors[0]["message"]
+
+
+def test_when_with_validate_dict() -> None:
+    """`When` works through validate_dict the same way as on @monk classes."""
+    from typing import TypedDict
+
+    class OrderDict(TypedDict):
+        payment_method: str
+        cc_number: Annotated[str, When(field=Ref("payment_method"), test=Eq("credit"), then=Len(min_len=16))]
+
+    validate_dict({"payment_method": "credit", "cc_number": "4111111111111111"}, OrderDict)
+    validate_dict({"payment_method": "cash", "cc_number": "x"}, OrderDict)
+    with pytest.raises(ValidationError):
+        validate_dict({"payment_method": "credit", "cc_number": "123"}, OrderDict)
+
+
+def test_when_accepts_constraint_classes() -> None:
+    """`test`, `then`, `else_` accept bare constraint classes (auto-instantiated)."""
+    from monk.constraints import LowerCase
+
+    @monk
+    class M:
+        flag: str
+        name: Annotated[str, When(field=Ref("flag"), test=Eq("strict"), then=LowerCase)]
+
+    validate(M(flag="strict", name="kai"))
+    with pytest.raises(ValidationError):
+        validate(M(flag="strict", name="KAI"))
+
+
+def test_when_missing_required_constraint_args() -> None:
+    """Bare constraint classes with required args raise a clear TypeError."""
+    with pytest.raises(TypeError, match="missing required arguments"):
+        When(field=Ref("x"), test=Eq, then=Len(min_len=1))
+    with pytest.raises(TypeError, match="missing required arguments"):
+        When(field=Ref("x"), test=Eq("y"), then=Eq)
+    with pytest.raises(TypeError, match="missing required arguments"):
+        When(field=Ref("x"), test=Eq("y"), then=Len(min_len=1), else_=Eq)
+
+
+def test_when_else_class_auto_instantiated() -> None:
+    """`else_` constraint class with no required args is auto-instantiated."""
+    from monk.constraints import LowerCase
+
+    @monk
+    class M:
+        flag: str
+        name: Annotated[str, When(field=Ref("flag"), test=Eq("strict"), then=Len(min_len=10), else_=LowerCase)]
+
+    # else_ branch (LowerCase)
+    validate(M(flag="loose", name="kai"))
+    with pytest.raises(ValidationError):
+        validate(M(flag="loose", name="KAI"))
+
+
+def test_switch_dispatches_by_discriminator() -> None:
+    """`Switch` picks the constraint whose key matches the resolved discriminator."""
+    from monk.constraints import Match
+
+    @monk
+    class Notification:
+        channel: str
+        target: Annotated[
+            str,
+            Switch(
+                field=Ref("channel"),
+                cases={"email": Len(min_len=5), "sms": Match(r"^\+\d+$")},
+            ),
+        ]
+
+    validate(Notification(channel="email", target="a@b.co"))
+    validate(Notification(channel="sms", target="+15551234"))
+
+    with pytest.raises(ValidationError) as exc:
+        validate(Notification(channel="email", target="a"))
+    assert "minimum length of 5" in exc.value.errors[0]["message"]
+
+
+def test_switch_default_branch() -> None:
+    """When no case matches, `default` is applied."""
+
+    @monk
+    class M:
+        kind: str
+        value: Annotated[str, Switch(field=Ref("kind"), cases={"strict": Len(min_len=10)}, default=Len(min_len=2))]
+
+    # default branch
+    validate(M(kind="other", value="ab"))
+    with pytest.raises(ValidationError):
+        validate(M(kind="other", value="x"))
+
+
+def test_switch_unknown_discriminator_without_default() -> None:
+    """Unknown discriminator with no `default` raises."""
+
+    @monk
+    class M:
+        kind: str
+        value: Annotated[str, Switch(field=Ref("kind"), cases={"a": Len(min_len=1)})]
+
+    with pytest.raises(ValidationError) as exc:
+        validate(M(kind="missing", value="x"))
+    assert "No case matches discriminator" in exc.value.errors[0]["message"]
+
+
+def test_switch_unhashable_discriminator() -> None:
+    """An unhashable discriminator falls back to `default` (or raises if none)."""
+
+    @monk
+    class M:
+        kind: Any
+        value: Annotated[str, Switch(field=Ref("kind"), cases={"a": Len(min_len=10)}, default=Len(min_len=1))]
+
+    # list is unhashable — Switch falls through to default.
+    validate(M(kind=["a", "b"], value="x"))
+
+
+def test_switch_constraint_classes_auto_instantiated() -> None:
+    """Bare constraint classes inside `cases` and `default` are auto-instantiated."""
+    from monk.constraints import LowerCase, Email
+
+    @monk
+    class M:
+        kind: str
+        value: Annotated[str, Switch(field=Ref("kind"), cases={"email": Email, "low": LowerCase}, default=LowerCase)]
+
+    validate(M(kind="email", value="a@b.co"))
+    validate(M(kind="low", value="hello"))
+    validate(M(kind="other", value="hello"))
+    with pytest.raises(ValidationError):
+        validate(M(kind="low", value="HELLO"))
+
+
+def test_switch_missing_required_constraint_args() -> None:
+    """Bare constraint classes with required args raise a clear TypeError."""
+    with pytest.raises(TypeError, match="missing required arguments"):
+        Switch(field=Ref("x"), cases={"a": Eq})
+    with pytest.raises(TypeError, match="missing required arguments"):
+        Switch(field=Ref("x"), cases={"a": Len(min_len=1)}, default=Eq)
+
+
+def test_switch_requires_at_least_one_case() -> None:
+    with pytest.raises(ValueError, match="at least one case"):
+        Switch(field=Ref("x"), cases={})

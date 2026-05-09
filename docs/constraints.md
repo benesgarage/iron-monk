@@ -67,6 +67,34 @@ from monk.constraints import Not, Email
 not_an_email: Annotated[str, Not(Email)]
 ```
 
+### `When`
+
+`When(field, test, then, else_=None, *, message=None, code=None)`
+
+Conditional validation. Resolves `field` (typically a `Ref` to a sibling field), runs `test` against it, and applies `then` to the **current** field's value when `test` passes. If `test` fails and `else_` is provided, `else_` is applied instead. See **[Cross-Field Validation](advanced/cross_field.md)** for end-to-end examples.
+
+```python
+from monk.constraints import When, Eq, Len, Ref
+
+cc_number: Annotated[str, When(field=Ref("payment_method"), test=Eq("credit"), then=Len(min_len=16, max_len=16))]
+```
+
+### `Switch`
+
+`Switch(field, cases, default=None, *, message=None, code=None)`
+
+Multi-branch dispatch. Resolves `field` (typically a `Ref`) and applies the constraint mapped to that value in `cases`. Falls back to `default` when the discriminator is missing or unhashable; raises a `ValidationError` if neither matches. Sugar for chained `When` over a discriminated union.
+
+```python
+from monk.constraints import Switch, Email, Match, Len, Ref
+
+target: Annotated[str, Switch(
+    field=Ref("channel"),
+    cases={"email": Email, "sms": Match(r"^\+\d+$")},
+    default=Len(min_len=1),
+)]
+```
+
 ### Per-Element Validation
 
 Annotate the element type directly. `iron-monk` synthesizes per-element rules at decoration time for `list`, `set`, `frozenset`, `tuple`, and `dict`:

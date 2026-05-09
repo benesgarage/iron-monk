@@ -79,6 +79,7 @@ nav:
       - Web APIs:
         - Strawberry GraphQL: examples/strawberry.md
         - Starlette (ASGI): examples/starlette.md
+        - FastAPI: examples/fastapi.md
       - Data & ORMs:
         - SQLAlchemy 2.0: examples/sqlalchemy.md
         - Tortoise ORM: examples/tortoise_orm.md

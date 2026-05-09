@@ -98,6 +98,77 @@ Custom constraints can opt in by accepting `Ref | <real type>` on the relevant a
 
 ---
 
+## Conditional Cross-Field Rules — `When` and `Switch`
+
+Sometimes a sibling does not just *parameterize* a constraint — it determines whether the constraint applies at all. `When` and `Switch` are declarative wrappers built on the same blueprint compiler as `Ref`, so they pay no extra runtime cost and inherit recursive resolution.
+
+### `When` — two-branch conditionals
+
+`When(field, test, then, else_=None)` resolves `field` (a `Ref` to a sibling), runs `test` against the resolved value, and applies `then` to the **current** field's value if `test` passes. If `test` fails and `else_` is provided, `else_` is applied instead; otherwise the current field is unchecked.
+
+```python
+from typing import Annotated
+from monk import monk
+from monk.constraints import Eq, Len, Ref, When
+
+@monk
+class Order:
+    payment_method: str
+    cc_number: Annotated[
+        str,
+        When(field=Ref("payment_method"), test=Eq("credit"), then=Len(min_len=16, max_len=16)),
+    ]
+```
+
+When `payment_method == "credit"`, the credit-card length rule applies; otherwise `cc_number` is unchecked. Add `else_` to enforce a fallback shape:
+
+```python
+@monk
+class Profile:
+    kind: str
+    handle: Annotated[
+        str,
+        When(field=Ref("kind"), test=Eq("admin"), then=Len(min_len=8), else_=Len(min_len=3)),
+    ]
+```
+
+`test`, `then`, and `else_` accept any constraint — bare classes (auto-instantiated), composed constraints (`AnyOf`, `AllOf`, `Not`), or container constraints (`Each`, `DictOf`).
+
+### `Switch` — multi-branch dispatch
+
+When more than two branches key off a discriminator, chained `When` becomes noisy. `Switch(field, cases, default=None)` is the typed sugar for that pattern — pass a mapping from discriminator values to constraints.
+
+```python
+from typing import Annotated
+from monk import monk
+from monk.constraints import Email, Len, Match, Ref, Switch
+
+@monk
+class Notification:
+    channel: str  # "email" | "sms" | "push"
+    target: Annotated[
+        str,
+        Switch(
+            field=Ref("channel"),
+            cases={
+                "email": Email,
+                "sms": Match(r"^\+\d+$"),
+                "push": Len(min_len=64),
+            },
+        ),
+    ]
+```
+
+If `channel` does not match any case, validation fails with `"No case matches discriminator ..."`. Provide `default=` to supply a catch-all:
+
+```python
+target: Annotated[str, Switch(field=Ref("channel"), cases={...}, default=Len(min_len=1))]
+```
+
+`Switch` is strict by design: an unknown discriminator without a `default` is an error. This makes discriminated unions structurally exhaustive, mirroring how `match` statements behave.
+
+---
+
 ## `__monk_validate__` — Programmatic Hook
 
 For rules that do not fit a single constraint (multi-field invariants, conditional logic, expensive computations), implement `__monk_validate__` on the class.
