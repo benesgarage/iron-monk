@@ -39,6 +39,11 @@ from monk.constraints import (
     IsTzNaive,
     DecimalPlaces,
     OneOf,
+    Email,
+    Trimmed,
+    StartsWith,
+    EndsWith,
+    Match,
 )
 from monk.exceptions import ValidationError
 
@@ -520,14 +525,18 @@ def test_max_bytes_constraint() -> None:
     constraint.validate("hello")  # 5 bytes
     constraint.validate("abc")
     constraint.validate("")
+    constraint.validate(b"hello")  # raw bytes also accepted
+    constraint.validate(bytearray(b"abc"))
     with pytest.raises(ValueError):
         constraint.validate("hello!")  # 6 bytes
     with pytest.raises(ValueError):
         constraint.validate("é" * 3)  # 6 UTF-8 bytes (each é is 2)
     with pytest.raises(ValueError):
+        constraint.validate(b"hello!")  # 6 raw bytes
+    with pytest.raises(ValueError):
         MaxBytes(max_bytes=0)
     with pytest.raises(TypeError):
-        constraint.validate(b"hello")
+        constraint.validate(123)
 
 
 def test_path_safe_constraint() -> None:
@@ -766,3 +775,75 @@ def test_oneof_accepts_enum() -> None:
         constraint.validate("yellow")
     with pytest.raises(ValueError):
         constraint.validate("RED")  # name, not value
+
+
+def test_string_constraints_accept_bytes() -> None:
+    """String-based constraints accept str, bytes, and bytearray inputs uniformly."""
+
+    # Format / identity
+    Email().validate(b"hello@example.com")
+    Email().validate(bytearray(b"hello@example.com"))
+    PhoneE164().validate(b"+14155552671")
+    Hash(algorithm="sha256").validate(b"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    CreditCard().validate(b"4111111111111111")
+    ISBN().validate(b"9780306406157")
+    HexString().validate(b"deadbeef")
+    MimeType().validate(b"application/json")
+    DataURI().validate(b"data:text/plain,Hello")
+
+    # Network / regex shapes
+    Slug().validate(b"my-blog-post")
+    SemVer().validate(b"1.2.3")
+    Base64().validate(b"SGVsbG8=")
+    HexColor().validate(b"#ff5733")
+    MacAddress().validate(b"00:1A:2B:3C:4D:5E")
+    JWT().validate(b"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig")
+    Hostname().validate(b"sub.example.com")
+    HttpURL().validate(b"https://example.com")
+    PathSafe().validate(b"file.txt")
+
+    # Time / cron / CSV
+    TimeOfDay().validate(b"09:30")
+    TimezoneName().validate(b"America/New_York")
+    Cron().validate(b"* * * * *")
+    CSV(LowerCase, separator=",").validate(b"a,b,c")
+    IsISO8601().validate(b"2024-01-01")
+    JSON().validate(b'{"x": 1}')
+
+    # Whitespace / structural
+    NoWhitespace().validate(b"hello")
+    SingleLine().validate(b"hello world")
+    Trimmed().validate(b"hello")
+
+    # Sized / position
+    StartsWith("foo").validate(b"foobar")
+    EndsWith("bar").validate(b"foobar")
+    Match(r"^[a-z]+$").validate(b"abc")
+
+
+def test_string_constraints_reject_invalid_utf8() -> None:
+    """Bytes that aren't valid UTF-8 raise ValueError, not TypeError."""
+    bad = b"\xff\xfe\xfd"  # not valid UTF-8
+
+    with pytest.raises(ValueError, match="UTF-8"):
+        Email().validate(bad)
+    with pytest.raises(ValueError, match="UTF-8"):
+        Slug().validate(bad)
+    with pytest.raises(ValueError, match="UTF-8"):
+        Hostname().validate(bad)
+
+
+def test_string_constraints_still_reject_non_text() -> None:
+    """Non-string, non-bytes types still raise TypeError."""
+    from monk.constraints import URL
+
+    with pytest.raises(TypeError):
+        Email().validate(123)
+    with pytest.raises(TypeError):
+        Slug().validate([1, 2, 3])
+    with pytest.raises(TypeError):
+        Hostname().validate({"x": 1})
+    with pytest.raises(TypeError):
+        URL().validate(123)
+    with pytest.raises(TypeError):
+        HttpURL().validate(123)

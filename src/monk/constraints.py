@@ -23,6 +23,24 @@ class _EachFastPathFail(Exception):
 _SWITCH_MISSING: Any = object()
 
 
+def _ensure_str(value: Any) -> str | None:
+    """Coerces a string-like value to ``str``.
+
+    Returns the value unchanged when it is already ``str``, decodes ``bytes`` /
+    ``bytearray`` as UTF-8, and returns ``None`` for any other type — leaving
+    the caller free to raise a context-specific ``TypeError``. Invalid UTF-8
+    is a value problem, not a type problem, so it raises ``ValueError``.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ValueError("Bytes are not valid UTF-8.")
+    return None
+
+
 class Ref:
     """A marker used to reference another field dynamically."""
 
@@ -447,11 +465,11 @@ class Match:
         object.__setattr__(self, "_compiled", re.compile(self.pattern))
 
     def validate(self, value: Any) -> None:
-        try:
-            if not self._compiled.match(value):
-                raise ValueError(f"Does not match the required pattern: {self.pattern}")
-        except TypeError:
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' does not support regex matching.")
+        if not self._compiled.match(s):
+            raise ValueError(f"Does not match the required pattern: {self.pattern}")
 
 
 @constraint
@@ -706,11 +724,11 @@ class Email:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not self._regex.match(value):
-                raise ValueError("Must be a valid email address.")
-        except TypeError:
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as an email.")
+        if not self._regex.match(s):
+            raise ValueError("Must be a valid email address.")
 
 
 @constraint
@@ -720,11 +738,11 @@ class StartsWith:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not value.startswith(self.prefix):
-                raise ValueError(f"Must start with '{repr(self.prefix)}'")
-        except (TypeError, AttributeError):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' does not support startswith().")
+        if not s.startswith(cast(str, self.prefix)):
+            raise ValueError(f"Must start with '{repr(self.prefix)}'")
 
 
 @constraint
@@ -734,11 +752,11 @@ class EndsWith:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not value.endswith(self.suffix):
-                raise ValueError(f"Must end with '{repr(self.suffix)}'")
-        except (TypeError, AttributeError):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' does not support endswith().")
+        if not s.endswith(cast(str, self.suffix)):
+            raise ValueError(f"Must end with '{repr(self.suffix)}'")
 
 
 @constraint
@@ -768,11 +786,11 @@ class JWT:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not self._regex.match(value):
-                raise ValueError("Must be a valid JSON Web Token (JWT).")
-        except TypeError:
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a JWT.")
+        if not self._regex.match(s):
+            raise ValueError("Must be a valid JSON Web Token (JWT).")
 
 
 @constraint
@@ -785,8 +803,11 @@ class URL:
     def validate(self, value: Any) -> None:
         from urllib.parse import urlparse
 
+        s = _ensure_str(value)
+        if s is None:
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a URL.")
         try:
-            result = urlparse(str(value))
+            result = urlparse(s)
             if not all([result.scheme, result.netloc]):
                 raise ValueError("Must be a valid URL.")
         except Exception:
@@ -854,11 +875,11 @@ class Slug:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not self._regex.match(value):
-                raise ValueError("Must be a valid slug.")
-        except TypeError:
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a slug.")
+        if not self._regex.match(s):
+            raise ValueError("Must be a valid slug.")
 
 
 @constraint
@@ -872,11 +893,11 @@ class SemVer:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not self._regex.match(value):
-                raise ValueError("Must be a valid semantic version.")
-        except TypeError:
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a semantic version.")
+        if not self._regex.match(s):
+            raise ValueError("Must be a valid semantic version.")
 
 
 @constraint
@@ -888,11 +909,11 @@ class Base64:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not self._regex.match(value):
-                raise ValueError("Must be a valid Base64 string.")
-        except TypeError:
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as Base64.")
+        if not self._regex.match(s):
+            raise ValueError("Must be a valid Base64 string.")
 
 
 @constraint
@@ -905,10 +926,11 @@ class JSON:
     def validate(self, value: Any) -> None:
         import json
 
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as JSON.")
         try:
-            json.loads(value)
+            json.loads(s)
         except ValueError:
             raise ValueError("Must be a valid JSON string.")
 
@@ -998,9 +1020,10 @@ class Trimmed:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated for whitespace.")
-        if value != value.strip():
+        if s != s.strip():
             raise ValueError("Must not contain leading or trailing whitespace.")
 
 
@@ -1012,10 +1035,11 @@ class IsISO8601:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as an ISO 8601 string.")
         try:
-            datetime.datetime.fromisoformat(value)
+            datetime.datetime.fromisoformat(s)
         except ValueError:
             raise ValueError("Must be a valid ISO 8601 string.")
 
@@ -1067,11 +1091,11 @@ class HexColor:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not self._regex.match(value):
-                raise ValueError("Must be a valid hexadecimal color code.")
-        except TypeError:
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a hex color.")
+        if not self._regex.match(s):
+            raise ValueError("Must be a valid hexadecimal color code.")
 
 
 @constraint
@@ -1125,11 +1149,11 @@ class MacAddress:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not self._regex.match(value):
-                raise ValueError("Must be a valid MAC address.")
-        except TypeError:
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a MAC address.")
+        if not self._regex.match(s):
+            raise ValueError("Must be a valid MAC address.")
 
 
 @constraint
@@ -1158,16 +1182,17 @@ class CSV:
         object.__setattr__(self, "_prepared", [c() if isinstance(c, type) else c for c in constraints])
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as a CSV string.")
 
-        if not value:
+        if not s:
             return
 
         errors: list[ErrorDict] = []
         seen: set[str] = set()
 
-        for i, val in enumerate(value.split(self.separator)):
+        for i, val in enumerate(s.split(self.separator)):
             if self.unique:
                 if val in seen:
                     errors.append({"field": f"[{i}]", "message": "All elements must be unique.", "code": "Unique"})
@@ -1198,16 +1223,17 @@ class Cron:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a cron expression.")
 
         # Handle standard macros like @daily
-        if not self.allow_aws and value.startswith("@"):
-            if value not in ("@yearly", "@annually", "@monthly", "@weekly", "@daily", "@midnight", "@hourly"):
+        if not self.allow_aws and s.startswith("@"):
+            if s not in ("@yearly", "@annually", "@monthly", "@weekly", "@daily", "@midnight", "@hourly"):
                 raise ValueError("Invalid cron macro.")
             return
 
-        parts = value.split()
+        parts = s.split()
         expected_len = 6 if self.allow_aws else 5
 
         if len(parts) != expected_len:
@@ -1304,11 +1330,11 @@ class PhoneE164:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not self._regex.match(value):
-                raise ValueError("Must be a valid E.164 phone number (e.g., +14155552671).")
-        except TypeError:
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a phone number.")
+        if not self._regex.match(s):
+            raise ValueError("Must be a valid E.164 phone number (e.g., +14155552671).")
 
 
 @constraint
@@ -1323,11 +1349,11 @@ class MimeType:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        try:
-            if not self._regex.match(value):
-                raise ValueError("Must be a valid MIME type (e.g., 'application/json').")
-        except TypeError:
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a MIME type.")
+        if not self._regex.match(s):
+            raise ValueError("Must be a valid MIME type (e.g., 'application/json').")
 
 
 _HASH_LENGTHS: dict[str, int] = {
@@ -1363,10 +1389,11 @@ class Hash:
         object.__setattr__(self, "algorithm", algo)
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a hash digest.")
         expected = _HASH_LENGTHS[self.algorithm]
-        if len(value) != expected or not _HEX_REGEX.match(value):
+        if len(s) != expected or not _HEX_REGEX.match(s):
             raise ValueError(f"Must be a valid {self.algorithm} hex digest of length {expected}.")
 
 
@@ -1378,9 +1405,10 @@ class CreditCard:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a credit card.")
-        digits_str = value.replace(" ", "").replace("-", "")
+        digits_str = s.replace(" ", "").replace("-", "")
         if not digits_str.isdigit() or not (13 <= len(digits_str) <= 19):
             raise ValueError("Must be a 13-19 digit credit card number.")
         checksum = 0
@@ -1403,9 +1431,10 @@ class ISBN:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as an ISBN.")
-        cleaned = value.replace("-", "").replace(" ", "").upper()
+        cleaned = s.replace("-", "").replace(" ", "").upper()
         if len(cleaned) == 10:
             if not (cleaned[:9].isdigit() and (cleaned[9].isdigit() or cleaned[9] == "X")):
                 raise ValueError("Must be a valid ISBN-10.")
@@ -1497,11 +1526,12 @@ class HexString:
             raise ValueError("length must be a positive integer.")
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a hex string.")
-        if not _HEX_REGEX.match(value):
+        if not _HEX_REGEX.match(s):
             raise ValueError("Must contain only hexadecimal characters.")
-        if self.length is not None and len(value) != self.length:
+        if self.length is not None and len(s) != self.length:
             raise ValueError(f"Must be exactly {self.length} hex characters.")
 
 
@@ -1513,12 +1543,13 @@ class TimezoneName:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a timezone name.")
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
         try:
-            ZoneInfo(value)
+            ZoneInfo(s)
         except (ZoneInfoNotFoundError, ValueError):
             raise ValueError("Must be a valid IANA timezone name.")
 
@@ -1561,9 +1592,10 @@ class NoWhitespace:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated for whitespace.")
-        if any(c.isspace() for c in value):
+        if any(c.isspace() for c in s):
             raise ValueError("Must not contain any whitespace characters.")
 
 
@@ -1575,9 +1607,10 @@ class SingleLine:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as a single-line string.")
-        if "\n" in value or "\r" in value:
+        if "\n" in s or "\r" in s:
             raise ValueError("Must not contain newline characters.")
 
 
@@ -1588,8 +1621,10 @@ Printable = Predicate(str.isprintable)
 class MaxBytes:
     """Validates that a string's UTF-8 encoded length is at most `max_bytes`.
 
-    Useful for database column limits and API payload guards where char count diverges from byte count
-    for multibyte characters (CJK, emoji, accented Latin).
+    Accepts ``str`` (encoded as UTF-8 to count) or raw ``bytes`` / ``bytearray``
+    (counted directly). Useful for database column limits and API payload guards
+    where char count diverges from byte count for multibyte characters (CJK,
+    emoji, accented Latin).
     """
 
     max_bytes: int
@@ -1601,9 +1636,13 @@ class MaxBytes:
             raise ValueError("max_bytes must be a positive integer.")
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        if isinstance(value, str):
+            n = len(value.encode("utf-8"))
+        elif isinstance(value, (bytes, bytearray)):
+            n = len(value)
+        else:
             raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated for byte length.")
-        if len(value.encode("utf-8")) > self.max_bytes:
+        if n > self.max_bytes:
             raise ValueError(f"Must encode to at most {self.max_bytes} UTF-8 bytes.")
 
 
@@ -1615,15 +1654,16 @@ class PathSafe:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as a filename.")
-        if not value:
+        if not s:
             raise ValueError("Filename must not be empty.")
-        if value in (".", ".."):
+        if s in (".", ".."):
             raise ValueError("Filename must not be '.' or '..'.")
-        if "/" in value or "\\" in value:
+        if "/" in s or "\\" in s:
             raise ValueError("Filename must not contain path separators.")
-        if "\x00" in value:
+        if "\x00" in s:
             raise ValueError("Filename must not contain null bytes.")
 
 
@@ -1641,9 +1681,10 @@ class Hostname:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a hostname.")
-        if not _HOSTNAME_REGEX.match(value):
+        if not _HOSTNAME_REGEX.match(s):
             raise ValueError("Must be a valid RFC 1123 hostname.")
 
 
@@ -1657,8 +1698,11 @@ class HttpURL:
     def validate(self, value: Any) -> None:
         from urllib.parse import urlparse
 
+        s = _ensure_str(value)
+        if s is None:
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a URL.")
         try:
-            result = urlparse(str(value))
+            result = urlparse(s)
         except Exception:
             raise ValueError("Must be a valid HTTP(S) URL.")
         if result.scheme not in ("http", "https") or not result.netloc:
@@ -1682,9 +1726,10 @@ class DataURI:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a data URI.")
-        if not _DATA_URI_REGEX.match(value):
+        if not _DATA_URI_REGEX.match(s):
             raise ValueError("Must be a valid data URI (e.g., 'data:image/png;base64,...').")
 
 
@@ -1699,9 +1744,10 @@ class TimeOfDay:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a time of day.")
-        if not _TIME_OF_DAY_REGEX.match(value):
+        if not _TIME_OF_DAY_REGEX.match(s):
             raise ValueError("Must be a valid 24-hour time of day (HH:MM or HH:MM:SS).")
 
 
@@ -1795,9 +1841,10 @@ class PEMBlock:
     code: str | None = None
 
     def validate(self, value: Any) -> None:
-        if not isinstance(value, str):
+        s = _ensure_str(value)
+        if s is None:
             raise TypeError(f"Type '{type(value).__name__}' cannot be validated as a PEM block.")
-        match = _PEM_BLOCK_REGEX.match(value)
+        match = _PEM_BLOCK_REGEX.match(s)
         if not match:
             raise ValueError("Must be a valid PEM block with matching BEGIN/END labels.")
         body = match.group(2)

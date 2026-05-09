@@ -182,6 +182,11 @@ Constraints are grouped by data domain. Within each group, entries are alphabeti
 
 ### Strings
 
+!!! tip "Bytes are accepted too"
+    Every string-typed constraint in this section (and Format & Identity below) accepts `bytes` and `bytearray` in addition to `str`. Inputs are decoded as UTF-8 before validation; invalid UTF-8 raises a `ValueError`. This lets you validate raw network/protobuf payloads without manually decoding first.
+
+
+
 #### `EndsWith`
 `EndsWith(suffix, *, message=None, code=None)` — requires the value to end with `suffix`. Accepts `Ref`.
 
@@ -215,7 +220,7 @@ sku: Annotated[str, Match(r"^PROD-\d+$")]
 ```
 
 #### `MaxBytes`
-`MaxBytes(max_bytes, *, message=None, code=None)` — UTF-8 encoded length must not exceed `max_bytes`. Use this for database column limits and API payload guards where character count diverges from byte count (CJK, emoji, accented Latin).
+`MaxBytes(max_bytes, *, message=None, code=None)` — UTF-8 encoded length must not exceed `max_bytes`. Accepts `str` (encoded to count) or raw `bytes` / `bytearray` (counted directly). Use for database column limits and API payload guards where character count diverges from byte count (CJK, emoji, accented Latin).
 
 ```python
 bio: Annotated[str, MaxBytes(280)]

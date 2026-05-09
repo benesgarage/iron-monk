@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0]
+
+### Added
+- **Bytes-aware string constraints:** Every string-typed constraint (`Email`, `URL`, `HttpURL`, `JWT`, `Slug`, `SemVer`, `Base64`, `HexColor`, `MacAddress`, `StartsWith`, `EndsWith`, `Match`, `Trimmed`, `IsISO8601`, `JSON`, `HexString`, `TimezoneName`, `PhoneE164`, `MimeType`, `Hash`, `CreditCard`, `ISBN`, `Cron`, `CSV`, `DataURI`, `TimeOfDay`, `Hostname`, `NoWhitespace`, `SingleLine`, `PathSafe`, `PEMBlock`) now accepts `bytes` and `bytearray` in addition to `str`. Inputs are decoded as UTF-8 before validation; invalid UTF-8 raises `ValueError`. Lets you validate raw network/protobuf payloads without manually decoding first.
+- **`MaxBytes` accepts raw bytes:** Now accepts `bytes` / `bytearray` directly (counted as-is) in addition to `str` (UTF-8 encoded to count).
+
 ## [0.27.0]
 
 ### Added
