@@ -187,6 +187,13 @@ Constraints are grouped by data domain. Within each group, entries are alphabeti
 
 
 
+#### `Blank`
+`Blank(*, message=None, code=None)` — requires the value to be empty or contain only whitespace. Combine with `Not` (`Not(Blank)`) for the inverse.
+
+```python
+placeholder: Annotated[str, Blank]
+```
+
 #### `EndsWith`
 `EndsWith(suffix, *, message=None, code=None)` — requires the value to end with `suffix`. Accepts `Ref`.
 

@@ -184,6 +184,22 @@ def test_trimmed_constraint() -> None:
         Trimmed().validate(123)
 
 
+def test_blank_constraint() -> None:
+    from monk.constraints import Blank
+
+    Blank().validate("")
+    Blank().validate("   ")
+    Blank().validate("\t\n  ")
+
+    with pytest.raises(ValueError):
+        Blank().validate("hello")
+    with pytest.raises(ValueError):
+        Blank().validate(" x ")
+
+    with pytest.raises(TypeError):
+        Blank().validate(123)
+
+
 def test_past_future_constraints() -> None:
     from monk.constraints import Past, Future
 

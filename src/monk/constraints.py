@@ -1058,6 +1058,21 @@ class Trimmed:
 
 
 @constraint
+class Blank:
+    """Validates that a string is empty or contains only whitespace."""
+
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        s = _ensure_str(value)
+        if s is None:
+            raise TypeError(f"Type '{type(value).__name__}' cannot be evaluated as blank.")
+        if s.strip() != "":
+            raise ValueError("Must be blank.")
+
+
+@constraint
 class IsISO8601:
     """Validates that a string is a valid ISO 8601 date or datetime."""
 
