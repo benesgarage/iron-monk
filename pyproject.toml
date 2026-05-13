@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iron-monk"
-version = "0.29.1"
+version = "0.30.0"
 description = "A minimalist, zero-coercion validation library for Python."
 readme = "README.md"
 authors = [
@@ -54,6 +54,7 @@ integrations = [
 Repository = "https://github.com/benesgarage/iron-monk"
 Issues = "https://github.com/benesgarage/iron-monk/issues"
 Documentation = "https://benesgarage.github.io/iron-monk/"
+LLM-Docs = "https://benesgarage.github.io/iron-monk/llms.txt"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

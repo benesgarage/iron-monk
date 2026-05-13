@@ -20,6 +20,8 @@
 
 **📖 Read the official documentation here: [benesgarage.github.io/iron-monk](https://benesgarage.github.io/iron-monk/)**
 
+**🤖 Using an AI coding agent?** Point it at [`llms.txt`](https://benesgarage.github.io/iron-monk/llms.txt) for a single-fetch index of the public API, [`llms-ctx.txt`](https://benesgarage.github.io/iron-monk/llms-ctx.txt) for a token-trimmed essentials digest, or [`llms-full.txt`](https://benesgarage.github.io/iron-monk/llms-full.txt) for the concatenated full docs. Agents working inside your project will also pick up [`AGENTS.md`](./AGENTS.md) automatically.
+
 ---
 
 ## Installation

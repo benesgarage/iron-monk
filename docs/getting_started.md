@@ -74,10 +74,11 @@ pip install iron-monk
 
 === "Standalone"
     ```python
-    from monk.constraints import Email # (1)!
+    from monk import validate_value # (1)!
+    from monk.constraints import Email, Len
     ```
 
-    1. Every constraint exposes a public `.validate(value)` method. No schema needed — call it on any raw value (see Step 3).
+    1. `validate_value(value, *constraints)` runs one or more constraints against a single value. No class needed — useful for controllers, scripts, and one-shot checks (see Step 3). Every constraint also exposes a raw `.validate(value)` method for direct use.
 
 ---
 
@@ -159,20 +160,30 @@ pip install iron-monk
 
 === "Standalone"
     ```python
-    from monk.constraints import Email
+    from monk import validate_value
+    from monk.constraints import Email, Len
+    from monk.exceptions import ValidationError
 
     try:
-        Email.validate("bad-email") # (1)!
-    except (ValueError, TypeError) as e:
-        print(e)
+        validate_value("X", Len(min_len=3), Email) # (1)!
+    except ValidationError as e:
+        print(len(e.errors)) # 2  (2)!
+
+    validate_value("kai@example.com", Email) # (3)!
+
+    # Lower-level: skip aggregation, raise native ValueError/TypeError
+    Email().validate("bad-email") # (4)!
     ```
 
-    1. Standalone calls raise native `ValueError` / `TypeError` — there is no aggregation, because there is no field context to aggregate over.
+    1. `validate_value` aggregates every per-constraint failure into a single `ValidationError` (same semantics as `validate()`). Use `field_name="..."` to customize the field label in `e.flatten()` output.
+    2. Both `Len` and `Email` fail — both errors collected, no fail-fast.
+    3. Happy path. Returns `None`; raises only on failure.
+    4. For raw single-constraint checks where aggregation is not needed, call the constraint's `.validate()` directly — it raises native `ValueError` / `TypeError`.
 
 ---
 
 ## Next Steps
 
-- **[Core Concepts](concepts.md)** — the validation lifecycle, defer semantics, and error model.
-- **[Constraints Toolkit](constraints.md)** — the full catalog of built-in constraints.
+- **[Core Concepts](concepts/index.md)** — the validation lifecycle, defer semantics, and error model.
+- **[Constraints Toolkit](constraints/index.md)** — the full catalog of built-in constraints.
 - **[Advanced Usage](advanced/index.md)** — cross-field rules, custom constraints, and framework integration.

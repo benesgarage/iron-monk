@@ -71,7 +71,7 @@ validate(user)
 ## Where to next
 
 1. **[Getting Started](getting_started.md)** — installation, the validation lifecycle, error handling.
-2. **[Core Concepts](concepts.md)** — the four pillars and the philosophy behind them.
-3. **[Constraints](constraints.md)** — the full catalog of built-in rules.
+2. **[Core Concepts](concepts/index.md)** — the four pillars and the philosophy behind them.
+3. **[Constraints](constraints/index.md)** — the full catalog of built-in rules.
 4. **[Advanced Usage](advanced/index.md)** — cross-field rules, custom constraints, settings.
 5. **[Integrations](examples/index.md)** — Strawberry, Starlette, SQLAlchemy, Tortoise, tyro, beartype.

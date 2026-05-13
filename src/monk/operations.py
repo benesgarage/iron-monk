@@ -987,6 +987,41 @@ async def validate_async_stream(stream: AsyncIterable[Any], *constraints: Any) -
         i += 1
 
 
+def validate_value(
+    value: Any,
+    constraint: MonkConstraint | type[MonkConstraint],
+    *constraints: MonkConstraint | type[MonkConstraint],
+    field_name: str = "value",
+) -> None:
+    """Validates a single value against one or more constraints, inline.
+
+    Convenience helper for ad-hoc validation outside a ``@monk`` dataclass —
+    useful inside controllers, scripts, or one-shot checks. Aggregates every
+    constraint failure into a single ``ValidationError`` (same semantics as
+    ``validate()``), not fail-fast.
+
+    Args:
+        value: The value to validate.
+        constraint: First constraint (required). Instance or bare class.
+        *constraints: Additional constraints (instances or bare classes).
+        field_name: Field name used in produced ``ErrorDict`` entries.
+            Defaults to ``"value"``.
+
+    Raises:
+        ValidationError: If any constraint fails. ``error.errors`` contains
+            one ``ErrorDict`` per failing constraint.
+        TypeError: If called with no constraints (caught at the Python call
+            site by the required ``constraint`` parameter).
+    """
+    prepared = _prepare_stream_constraints((constraint, *constraints))
+    errors: list[ErrorDict] = []
+    _validate_stream_item(value, prepared, errors)
+    if errors:
+        for error_dict in errors:
+            error_dict["field"] = field_name
+        raise ValidationError(errors)
+
+
 def _process_monk_validate_result(result: Any, errors: list[ErrorDict]) -> None:
     """Normalizes and processes the output of the __monk_validate__ hook."""
     if result is None:

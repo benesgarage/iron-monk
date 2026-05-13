@@ -1,0 +1,70 @@
+# iron-monk
+
+> Zero-coercion, zero-dependency, zero-base-class validation library for Python. Annotations are the schema; constraints live inside `typing.Annotated`. Aggregates every field error into one `ValidationError` — never fails fast. Published on PyPI as `iron-monk`, imported as `monk`.
+
+This file follows the [llms.txt convention](https://llmstxt.org) so AI agents can comprehend iron-monk's public surface in a single fetch. For one-shot ingestion of *all* docs as flat markdown, fetch [`llms-full.txt`](llms-full.txt). For a token-trimmed essentials-only digest, fetch [`llms-ctx.txt`](llms-ctx.txt).
+
+## Quickstart
+
+- [Getting Started](https://benesgarage.github.io/iron-monk/getting_started/): install, decorate, validate.
+- [Index / Home](https://benesgarage.github.io/iron-monk/): library overview and positioning.
+
+## Core Concepts
+
+The four pillars of iron-monk. Read in order for the conceptual arc, or pick one for a deep-dive.
+
+- [Concepts overview](https://benesgarage.github.io/iron-monk/concepts/): philosophy + pillar map.
+- [1 · The @monk Decorator](https://benesgarage.github.io/iron-monk/concepts/decorator/): one decorator, three surfaces (classes, functions, methods).
+- [2 · Constraints](https://benesgarage.github.io/iron-monk/concepts/constraints/): how to stack constraints inside `Annotated`; nullability; cross-field; custom constraints.
+- [3 · Validation](https://benesgarage.github.io/iron-monk/concepts/validation/): four entry points — `validate`, `validate_value`, `validate_dict`, `validate_stream`.
+- [4 · Errors](https://benesgarage.github.io/iron-monk/concepts/errors/): `ValidationError`, `flatten()`, `to_rfc7807()`, error codes.
+
+## Constraints catalog
+
+60+ built-ins grouped by data domain. Every entry includes signature, semantics, and a one-line example.
+
+- [Catalog overview](https://benesgarage.github.io/iron-monk/constraints/): anatomy of a constraint + group index.
+- [Composition](https://benesgarage.github.io/iron-monk/constraints/composition/): `AnyOf`, `AllOf`, `Not`, `When`, `Switch`, `Each`, `DictOf`, `Predicate`, per-element validation.
+- [Nullability](https://benesgarage.github.io/iron-monk/constraints/nullability/): `Nullable`, `NotNull`.
+- [Strings](https://benesgarage.github.io/iron-monk/constraints/strings/): `Blank`, `EndsWith`, `HexString`, `Match`, `MaxBytes`, `NoWhitespace`, `PathSafe`, `SingleLine`, `StartsWith`, `Trimmed`, `LowerCase`/`UpperCase`/`IsAlnum`/`IsAlpha`/`IsAscii`/`IsDigit`/`Printable`.
+- [Format & Identity](https://benesgarage.github.io/iron-monk/constraints/format/): `Email`, `URL`, `HttpURL`, `UUID`, `JWT`, `JSON`, `Base64`, `DataURI`, `MimeType`, `Hash`, `CreditCard`, `ISBN`, `IPAddress`, `MacAddress`, `Hostname`, `PEMBlock`, `PhoneE164`, `SemVer`, `Slug`, `TimeOfDay`, `TimezoneName`, `IsISO8601`, `HexColor`.
+- [Numeric](https://benesgarage.github.io/iron-monk/constraints/numeric/): `Interval`, `MultipleOf`, `Even`/`Odd`, `Positive`/`Negative`/`NonNegative`, `NonZero`, `Port`, `PowerOfTwo`, `DecimalPlaces`, `IsFinite`/`IsInfinite`/`IsNan`.
+- [Equality & Choice](https://benesgarage.github.io/iron-monk/constraints/choice/): `Eq`, `OneOf` (incl. `Enum` support).
+- [Collections](https://benesgarage.github.io/iron-monk/constraints/collections/): `Len`, `ExactLen`, `NonEmpty`, `Unique`, `Contains`, `ContainsKeys`, `CSV`, `Sorted`, `Subset`, `AllEqual`, `Nested`.
+- [Datetime & Schedule](https://benesgarage.github.io/iron-monk/constraints/datetime/): `Past`, `Future`, `IsTzAware`, `IsTzNaive`, `IsUTC`, `Cron`.
+- [Filesystem](https://benesgarage.github.io/iron-monk/constraints/filesystem/): `IsFile`, `IsDir`.
+- [File Uploads](https://benesgarage.github.io/iron-monk/constraints/uploads/): `FileSize`, `MagicBytes` (content-based mime detection).
+- [Geospatial](https://benesgarage.github.io/iron-monk/constraints/geospatial/): `LatLong`.
+- [Custom Messages & Constraints](https://benesgarage.github.io/iron-monk/constraints/custom/): `{value}`/`{field}` placeholders; the `@constraint` decorator.
+
+## Advanced usage
+
+- [Advanced overview](https://benesgarage.github.io/iron-monk/advanced/): when to leave the catalog.
+- [Cross-Field Validation](https://benesgarage.github.io/iron-monk/advanced/cross_field/): `Ref(...)` resolution + `__monk_validate__` hook.
+- [Context-Aware Validation](https://benesgarage.github.io/iron-monk/advanced/context/): `Ctx("key")` and the `context=` kwarg on `validate()` / `validate_dict()`.
+- [Customization](https://benesgarage.github.io/iron-monk/advanced/customization/): building reusable constraints; message templating; refs in custom constraints.
+- [Execution Models](https://benesgarage.github.io/iron-monk/advanced/execution/): partial validation, drop-extra-keys, recursive schemas, streaming.
+- [Settings & Type Metadata](https://benesgarage.github.io/iron-monk/advanced/settings/): `unwrappers`, `type_metadata`, env-var overrides, framework integration hooks.
+
+## Integrations (battle-tested recipes)
+
+- [Integrations overview](https://benesgarage.github.io/iron-monk/examples/): index of recipes.
+- [Strawberry GraphQL](https://benesgarage.github.io/iron-monk/examples/strawberry/): errors-as-data, `Maybe[T]`.
+- [Starlette (ASGI)](https://benesgarage.github.io/iron-monk/examples/starlette/): RFC 7807 exception handlers, dict-mode + DTO-mode.
+- [FastAPI](https://benesgarage.github.io/iron-monk/examples/fastapi/): request validation patterns, including file uploads.
+- [SQLAlchemy 2.0](https://benesgarage.github.io/iron-monk/examples/sqlalchemy/): DTO pattern at the API boundary.
+- [Tortoise ORM](https://benesgarage.github.io/iron-monk/examples/tortoise_orm/): async ORM pairing.
+- [tyro (CLI)](https://benesgarage.github.io/iron-monk/examples/tyro/): validate dataclass-driven CLIs.
+- [beartype](https://benesgarage.github.io/iron-monk/examples/beartype/): stack runtime type-checking under business constraints.
+- [App configuration](https://benesgarage.github.io/iron-monk/examples/app_config/): fail-fast env-var validation on boot.
+
+## Reference
+
+- [API Reference](https://benesgarage.github.io/iron-monk/api_reference/): auto-generated symbol listing for every public export.
+- [Benchmarks](https://benesgarage.github.io/iron-monk/benchmarks/): methodology and results.
+
+## Optional
+
+- [Repository on GitHub](https://github.com/benesgarage/iron-monk): source, issues, releases.
+- [PyPI page](https://pypi.org/project/iron-monk/): install metadata.
+- [`AGENTS.md`](https://github.com/benesgarage/iron-monk/blob/main/AGENTS.md): single-page agent quick-reference.

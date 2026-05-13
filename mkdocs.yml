@@ -11,7 +11,6 @@ theme:
     - navigation.tabs.sticky
     - navigation.top
     - navigation.indexes
-    - toc.integrate
     - search.suggest
     - search.highlight
     - content.code.copy
@@ -19,6 +18,7 @@ theme:
     - navigation.path
     - navigation.footer
     - content.code.annotate
+    - toc.follow
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -66,8 +66,26 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started: getting_started.md
-  - Core Concepts: concepts.md
-  - Constraints: constraints.md
+  - Core Concepts:
+      - concepts/index.md
+      - 1 · The Decorator: concepts/decorator.md
+      - 2 · Constraints: concepts/constraints.md
+      - 3 · Validation: concepts/validation.md
+      - 4 · Errors: concepts/errors.md
+  - Constraints:
+      - constraints/index.md
+      - Composition: constraints/composition.md
+      - Nullability: constraints/nullability.md
+      - Strings: constraints/strings.md
+      - Format & Identity: constraints/format.md
+      - Numeric: constraints/numeric.md
+      - Equality & Choice: constraints/choice.md
+      - Collections: constraints/collections.md
+      - Datetime & Schedule: constraints/datetime.md
+      - Filesystem: constraints/filesystem.md
+      - File Uploads: constraints/uploads.md
+      - Geospatial: constraints/geospatial.md
+      - Custom Messages & Constraints: constraints/custom.md
   - Advanced:
       - advanced/index.md
       - Cross-Field Validation: advanced/cross_field.md

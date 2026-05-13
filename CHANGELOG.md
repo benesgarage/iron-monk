@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0]
+
+### Added
+- **File upload constraints:** Two new built-ins for validating file-upload bodies as raw `bytes` / `bytearray`. Designed to compose — stack on a single field via `Annotated`, or apply independently.
+  - **`FileSize(min_size=..., max_size=...)`:** Length check for binary payloads. Both bounds inclusive; either can be omitted. Operates on `bytes` / `bytearray` only — does not coerce strings (use `MaxBytes` for UTF-8 byte-length on strings).
+  - **`MagicBytes(allowed=..., extra_signatures=...)`:** Sniffs leading bytes against an internal registry of file-format signatures and asserts the detected mime is in `allowed`. Defends against extension- and header-based mime spoofing. Ships signatures for PNG, JPEG, GIF, WebP, BMP, TIFF, ICO, PDF, RTF, ZIP (also covers DOCX/XLSX/PPTX), GZIP, TAR, 7Z, RAR, MP3, MP4, WAV, OGG, WebM, AVI. Pass `extra_signatures={"custom/mime": ((b"\\x00...", 0),)}` to register additional formats.
+- **`validate_value()` helper:** Inline validator for a single value against one or more constraints, without wrapping it in a `@monk` dataclass. Aggregates all per-constraint failures into a single `ValidationError` (matches `validate()` semantics — not fail-fast). Signature: `validate_value(value, constraint, *constraints, field_name="value")`. First constraint is required positionally; static type checkers flag empty calls. Bare constraint classes auto-instantiate.
+- **AI-agent discoverability artefacts:** New `AGENTS.md` (repo-root quick reference for any agent crawling the repo) and three docs-site files — `docs/llms.txt` (navigable index per the [llms.txt spec](https://llmstxt.org)), `docs/llms-ctx.txt` (token-trimmed essentials digest), and `docs/llms-full.txt` (concatenated full docs, regenerated via `make llms`). `pyproject.toml` advertises a `LLM-Docs` URL so PyPI exposes the link directly.
+
 ## [0.29.1]
 
 ### Added

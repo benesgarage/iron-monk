@@ -44,7 +44,10 @@ from monk.constraints import (
     StartsWith,
     EndsWith,
     Match,
+    FileSize,
+    MagicBytes,
 )
+from monk import monk
 from monk.exceptions import ValidationError
 
 
@@ -847,3 +850,101 @@ def test_string_constraints_still_reject_non_text() -> None:
         URL().validate(123)
     with pytest.raises(TypeError):
         HttpURL().validate(123)
+
+
+# --- File upload constraints: FileSize + MagicBytes ---
+
+_PNG_HEADER = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+_JPEG_HEADER = b"\xff\xd8\xff\xe0" + b"\x00" * 16
+_GIF87 = b"GIF87a" + b"\x00" * 16
+_GIF89 = b"GIF89a" + b"\x00" * 16
+_WEBP = b"RIFF\x00\x00\x00\x00WEBP" + b"\x00" * 8
+_PDF = b"%PDF-1.4\n" + b"\x00" * 16
+_ZIP = b"PK\x03\x04" + b"\x00" * 16
+_TAR = b"\x00" * 257 + b"ustar" + b"\x00" * 16
+_OGG = b"OggS" + b"\x00" * 16
+_BOGUS = b"\xde\xad\xbe\xef" * 8
+
+
+def test_file_size_constraint() -> None:
+    c = FileSize(min_size=4, max_size=8)
+    c.validate(b"abcd")
+    c.validate(b"abcdefgh")
+    c.validate(bytearray(b"abcdef"))
+    with pytest.raises(ValueError):
+        c.validate(b"abc")  # below min
+    with pytest.raises(ValueError):
+        c.validate(b"abcdefghi")  # above max
+    with pytest.raises(TypeError):
+        c.validate("string-not-bytes")
+    with pytest.raises(TypeError):
+        c.validate(12345)
+
+
+def test_file_size_bounds_optional() -> None:
+    FileSize(max_size=10).validate(b"hi")
+    FileSize(min_size=2).validate(b"hi there")
+    FileSize().validate(b"any")
+
+
+def test_magic_bytes_detects_known_formats() -> None:
+    c = MagicBytes()
+    c.validate(_PNG_HEADER)
+    c.validate(_JPEG_HEADER)
+    c.validate(_GIF87)
+    c.validate(_GIF89)
+    c.validate(_WEBP)
+    c.validate(_PDF)
+    c.validate(_ZIP)
+    c.validate(_TAR)
+    c.validate(_OGG)
+
+
+def test_magic_bytes_rejects_unknown() -> None:
+    with pytest.raises(ValueError, match="does not match"):
+        MagicBytes().validate(_BOGUS)
+
+
+def test_magic_bytes_allowed_whitelist() -> None:
+    c = MagicBytes(allowed=("image/png", "image/jpeg"))
+    c.validate(_PNG_HEADER)
+    c.validate(_JPEG_HEADER)
+    with pytest.raises(ValueError, match="not in allowed types"):
+        c.validate(_PDF)
+
+
+def test_magic_bytes_extra_signatures() -> None:
+    custom = b"MYFMT\x00"
+    c = MagicBytes(
+        allowed=("application/x-myfmt",),
+        extra_signatures={"application/x-myfmt": ((custom, 0),)},
+    )
+    c.validate(custom + b"\x00" * 16)
+    with pytest.raises(ValueError):
+        c.validate(_PNG_HEADER)
+
+
+def test_magic_bytes_type_error() -> None:
+    with pytest.raises(TypeError):
+        MagicBytes().validate("not bytes")
+    with pytest.raises(TypeError):
+        MagicBytes().validate(123)
+
+
+def test_magic_bytes_accepts_bytearray() -> None:
+    MagicBytes().validate(bytearray(_PNG_HEADER))
+
+
+def test_file_size_and_magic_bytes_compose() -> None:
+    """Both constraints stack on a single field via @monk dataclass."""
+    from typing import Annotated
+
+    @monk(defer=False)
+    class Upload:
+        body: Annotated[bytes, MagicBytes(allowed=("image/png",)), FileSize(max_size=64)]
+
+    Upload(body=_PNG_HEADER)
+    with pytest.raises(ValidationError):
+        Upload(body=_BOGUS)
+    with pytest.raises(ValidationError):
+        Upload(body=_PNG_HEADER * 4)

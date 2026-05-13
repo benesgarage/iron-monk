@@ -1,6 +1,6 @@
 # Execution Models
 
-`iron-monk` exposes three validation entry points. The basics are covered in **[Core Concepts → Validation](../concepts.md#3-validation)**; this page documents the flags, edge cases, and recursion patterns power users hit in production.
+`iron-monk` exposes three validation entry points. The basics are covered in **[Core Concepts → Validation](../concepts/validation.md)**; this page documents the flags, edge cases, and recursion patterns power users hit in production.
 
 ---
 

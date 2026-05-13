@@ -1,11 +1,12 @@
 from .decorators import monk, constraint
-from .operations import validate, validate_dict, validate_stream, validate_async_stream
+from .operations import validate, validate_value, validate_dict, validate_stream, validate_async_stream
 from .config import settings
 from .types import MonkError, ErrorDict
 
 __all__ = [
     "monk",
     "validate",
+    "validate_value",
     "validate_dict",
     "validate_stream",
     "validate_async_stream",

@@ -1895,3 +1895,126 @@ class PEMBlock:
         body = match.group(2)
         if not body or not any(c.isalnum() or c in "+/=" for c in body):
             raise ValueError("PEM block body must contain at least one Base64 character.")
+
+
+@constraint
+class FileSize:
+    """Validates that a ``bytes`` / ``bytearray`` value's length falls within ``[min_size, max_size]``.
+
+    Intended for file-upload bodies. Both bounds are inclusive; either may be
+    ``None`` to skip that side of the check. Unlike :class:`MaxBytes`, this
+    does not accept ``str`` — mixing string byte-length and file-body length
+    would hide bugs.
+    """
+
+    min_size: int | None = None
+    max_size: int | None = None
+    message: str | None = None
+    code: str | None = None
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, (bytes, bytearray)):
+            raise TypeError(
+                f"Type '{type(value).__name__}' cannot be validated as file size; expected bytes."
+            )
+        n = len(value)
+        if self.min_size is not None and n < self.min_size:
+            raise ValueError(f"File size {n} bytes is below minimum of {self.min_size} bytes.")
+        if self.max_size is not None and n > self.max_size:
+            raise ValueError(f"File size {n} bytes exceeds maximum of {self.max_size} bytes.")
+
+
+_MagicPattern = tuple[tuple[bytes, int], ...]
+_MagicRegistry = dict[str, tuple[_MagicPattern, ...]]
+
+_DEFAULT_MAGIC_SIGNATURES: _MagicRegistry = {
+    # Images
+    "image/png":    (((b"\x89PNG\r\n\x1a\n", 0),),),
+    "image/jpeg":   (((b"\xff\xd8\xff", 0),),),
+    "image/gif":    (((b"GIF87a", 0),), ((b"GIF89a", 0),)),
+    "image/webp":   (((b"RIFF", 0), (b"WEBP", 8)),),
+    "image/bmp":    (((b"BM", 0),),),
+    "image/tiff":   (((b"II*\x00", 0),), ((b"MM\x00*", 0),)),
+    "image/x-icon": (((b"\x00\x00\x01\x00", 0),),),
+    # Documents
+    "application/pdf": (((b"%PDF-", 0),),),
+    "application/rtf": (((b"{\\rtf", 0),),),
+    # Archives (ZIP also covers DOCX/XLSX/PPTX by design — disambiguation is out of scope)
+    "application/zip":              (((b"PK\x03\x04", 0),), ((b"PK\x05\x06", 0),), ((b"PK\x07\x08", 0),)),
+    "application/gzip":             (((b"\x1f\x8b", 0),),),
+    "application/x-tar":            (((b"ustar", 257),),),
+    "application/x-7z-compressed":  (((b"7z\xbc\xaf\x27\x1c", 0),),),
+    "application/vnd.rar":          (((b"Rar!\x1a\x07\x00", 0),), ((b"Rar!\x1a\x07\x01\x00", 0),)),
+    # Media
+    "audio/mpeg":      (((b"ID3", 0),), ((b"\xff\xfb", 0),), ((b"\xff\xf3", 0),), ((b"\xff\xf2", 0),)),
+    "video/mp4":       (((b"ftyp", 4),),),
+    "audio/wav":       (((b"RIFF", 0), (b"WAVE", 8)),),
+    "audio/ogg":       (((b"OggS", 0),),),
+    "video/webm":      (((b"\x1aE\xdf\xa3", 0),),),
+    "video/x-msvideo": (((b"RIFF", 0), (b"AVI ", 8)),),
+}
+
+
+def _detect_mime(data: bytes | bytearray, registry: _MagicRegistry) -> str | None:
+    """Returns the first mime whose signature matches ``data``, or ``None``."""
+    mv = memoryview(data)
+    n = len(mv)
+    for mime, alternatives in registry.items():
+        for pattern in alternatives:
+            if all(
+                n >= offset + len(sig) and bytes(mv[offset:offset + len(sig)]) == sig
+                for sig, offset in pattern
+            ):
+                return mime
+    return None
+
+
+@constraint
+class MagicBytes:
+    """Validates that a ``bytes`` value's content matches a known file-format signature.
+
+    Sniffs the leading bytes of ``value`` against an internal registry of magic
+    signatures and asserts the detected mime is in ``allowed`` (if provided).
+    Defends against extension- and header-based mime spoofing.
+
+    Supply ``extra_signatures`` to register custom formats. Each entry maps a
+    mime string to a single AND-pattern (tuple of ``(bytes, offset)`` pairs that
+    must all match).
+
+    Allowed list uses **mime strings**, e.g. ``("image/png", "image/jpeg")``.
+    When ``allowed=None``, any recognized format passes.
+    """
+
+    allowed: tuple[str, ...] | None = None
+    extra_signatures: dict[str, _MagicPattern] | None = None
+    message: str | None = None
+    code: str | None = None
+
+    _registry: _MagicRegistry = field(init=False, repr=False, compare=False)
+    _allowed_set: frozenset[str] | None = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        registry: _MagicRegistry = dict(_DEFAULT_MAGIC_SIGNATURES)
+        if self.extra_signatures:
+            for mime, pattern in self.extra_signatures.items():
+                registry[mime] = (pattern,)
+        object.__setattr__(self, "_registry", registry)
+        object.__setattr__(
+            self,
+            "_allowed_set",
+            frozenset(self.allowed) if self.allowed is not None else None,
+        )
+
+    def validate(self, value: Any) -> None:
+        if not isinstance(value, (bytes, bytearray)):
+            raise TypeError(
+                f"Type '{type(value).__name__}' cannot be validated as file content; expected bytes."
+            )
+        detected = _detect_mime(value, self._registry)
+        if detected is None:
+            raise ValueError("File content does not match any known file format signature.")
+        if self._allowed_set is not None and detected not in self._allowed_set:
+            allowed_str = ", ".join(sorted(self._allowed_set))
+            raise ValueError(
+                f"Detected file type '{detected}' is not in allowed types: {allowed_str}."
+            )

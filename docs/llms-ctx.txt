@@ -1,0 +1,206 @@
+# iron-monk · LLM context digest
+
+> Zero-coercion, zero-dependency, zero-base-class validation lib for Python. PyPI: `iron-monk`. Import: `monk`. Aggregates all field errors into one `ValidationError`.
+
+Token-trimmed essentials. For the full doc tree see [`llms.txt`](llms.txt); for concatenated full docs see [`llms-full.txt`](llms-full.txt).
+
+## Install
+
+```bash
+pip install iron-monk
+```
+
+## Top-level imports
+
+```python
+from monk import (
+    monk,                       # decorator (class or function/method)
+    constraint,                 # decorator for custom constraints
+    validate,                   # validate a @monk instance
+    validate_value,             # inline validate value vs constraints
+    validate_dict,              # validate raw dict vs schema
+    validate_stream,            # lazy stream validation (generator)
+    validate_async_stream,      # async stream sibling
+    settings,                   # globals (defer, default_allow_none, ...)
+    MonkError, ErrorDict,
+)
+from monk.constraints import (
+    # composition
+    AnyOf, AllOf, Not, When, Switch, Each, DictOf, Predicate,
+    Nullable, NotNull, Ref, Ctx,
+    # strings
+    Blank, EndsWith, HexString, IsAlnum, IsAlpha, IsAscii, IsDigit, LowerCase,
+    Printable, UpperCase, Match, MaxBytes, NoWhitespace, PathSafe,
+    SingleLine, StartsWith, Trimmed,
+    # format & identity
+    Base64, DataURI, CreditCard, Email, Hash, HexColor, Hostname, HttpURL,
+    IPAddress, ISBN, IsISO8601, JSON, JWT, MacAddress, MimeType, PEMBlock,
+    PhoneE164, SemVer, Slug, TimeOfDay, TimezoneName, URL, UUID,
+    # numeric
+    DecimalPlaces, Even, Odd, Interval, IsFinite, IsInfinite, IsNan,
+    MultipleOf, NonNegative, Positive, Negative, NonZero, Port, PowerOfTwo,
+    # choice
+    Eq, OneOf,
+    # collections
+    AllEqual, Contains, ContainsKeys, CSV, ExactLen, Len, Nested, NonEmpty,
+    Sorted, Subset, Unique,
+    # datetime + schedule
+    Future, IsTzAware, IsTzNaive, IsUTC, Past, Cron,
+    # filesystem + uploads + geospatial
+    IsDir, IsFile, FileSize, MagicBytes, LatLong,
+)
+from monk.exceptions import ValidationError, MissingContextError, UnvalidatedAccessError
+```
+
+## Promises (rely on these)
+
+1. Zero coercion — `TypeError` for wrong type, `ValueError` for wrong format. Input is never mutated.
+2. Zero dependencies — pure stdlib. Ships `py.typed`.
+3. Zero base classes — `@monk` returns a plain `@dataclass`.
+4. Zero fail-fast — every field error aggregates into one `ValidationError`.
+
+## Quickstart
+
+```python
+from typing import Annotated
+from monk import monk, validate
+from monk.constraints import Email, Interval, Len
+
+@monk
+class User:
+    email: Annotated[str, Email]
+    age:   Annotated[int, Interval(ge=18)]
+    tags:  list[Annotated[str, Len(min_len=2)]]
+
+u = User(email="bad", age=12, tags=["a"])    # defer is True — no raise yet
+validate(u)                                  # raises ValidationError with all three failures
+```
+
+## Entry points
+
+| Function | Use when |
+| --- | --- |
+| `validate(instance, *, context=None)` | You already built a `@monk` instance and want to validate it. |
+| `validate_value(value, c1, *cs, field_name="value")` | One-shot value check outside any class. Aggregates failures across constraints. |
+| `validate_dict(data, schema, *, partial=False, drop_extra_keys=False, context=None)` | Validate a raw dict — no instantiation. HTTP boundary. |
+| `validate_stream(iterable, *constraints)` | Lazy item-by-item. Generator. |
+| `validate_async_stream(aiter, *constraints)` | Async equivalent. |
+
+## Decorator modes
+
+```python
+@monk            class C: ...      # defer=True (default). Call validate(c) yourself.
+@monk(defer=False) class C: ...    # eager — raises in __post_init__.
+@monk            def f(...): ...   # function args + return validated on every call.
+
+class S:
+    @classmethod
+    @monk                          # @monk MUST sit below the binding decorator
+    def m(cls, x: Annotated[int, Interval(ge=0)]): ...
+```
+
+## Error model
+
+```python
+try:
+    validate(instance)
+except ValidationError as e:
+    e.errors            # list[ErrorDict]: {"field": str, "message": str, "code": str}
+    e.flatten()         # ["email: Must be a valid email address.", ...]
+    e.to_rfc7807()      # dict for HTTP problem-detail body
+```
+
+Field paths: `address.zip`, `tags[2]`, `prefs['theme']`. Codes default to constraint class name; override with `code="..."`.
+
+## Custom constraint
+
+```python
+from monk import constraint
+
+@constraint
+class DivisibleBy:
+    divisor: int
+    message: str | None = None    # supports {value}, {divisor} placeholders
+
+    def validate(self, value: int) -> None:
+        if value % self.divisor != 0:
+            raise ValueError(f"Must be divisible by {self.divisor}.")
+```
+
+Constraint instances are frozen + slotted. Set internal computed fields in `__post_init__` via `object.__setattr__(self, "_x", v)`.
+
+## Cross-field
+
+```python
+from monk.constraints import Interval, Ref
+
+@monk
+class Range:
+    min_val: int
+    max_val: Annotated[int, Interval(gt=Ref("min_val"))]
+```
+
+`Ref(name)` resolves at validation time, not at decoration.
+
+## Context (per-call)
+
+```python
+from monk.constraints import Ctx
+
+@monk
+class Edit:
+    actor_id: Annotated[int, Eq(Ctx("current_user_id"))]
+
+validate(edit, context={"current_user_id": 42})
+```
+
+## Composition
+
+```python
+contact: Annotated[str, AnyOf(Email, URL)]
+name:    Annotated[str, AllOf(LowerCase, Trimmed)]
+not_em:  Annotated[str, Not(Email)]
+
+# Per-element on containers:
+emails: list[Annotated[str, Email]]                                # auto per-item
+pair:   tuple[Annotated[int, Interval(gt=0)], Annotated[str, Len(min_len=1)]]
+links:  dict[Annotated[str, LowerCase], Annotated[str, URL]]
+```
+
+## File uploads (FastAPI / Starlette)
+
+```python
+from monk.constraints import FileSize, MagicBytes
+
+@monk
+class Upload:
+    body: Annotated[bytes, MagicBytes(allowed=("image/png", "image/jpeg")), FileSize(max_size=5_000_000)]
+```
+
+`MagicBytes` sniffs leading bytes — defends against `Content-Type` spoofing.
+`MimeType` (separate constraint) only validates the *string format* of a claimed mime header.
+
+## Settings
+
+```python
+from monk import settings
+settings.defer = False             # eager-by-default for all @monk classes
+settings.default_allow_none = True # let an external type-checker own required-field enforcement
+```
+
+Env-var overrides: `MONK_DEFER=false`, `MONK_DEFAULT_ALLOW_NONE=true`.
+
+## Gotchas
+
+- Defer is `True` by default for classes. Touch `u.email` before `validate(u)` → `UnvalidatedAccessError`.
+- `Each` rejects generators — convert to list/tuple or use `validate_stream`.
+- `validate_dict` skips `__post_init__` by design — no side effects.
+- Never `@dataclass` + `@monk` together — `@monk` does the dataclass conversion.
+- Constraints never coerce. `Annotated[int, Interval(gt=0)]` will not parse strings.
+
+## See also
+
+- Full doc index → [`llms.txt`](llms.txt)
+- Concatenated full docs → [`llms-full.txt`](llms-full.txt)
+- Repo → https://github.com/benesgarage/iron-monk
+- Docs → https://benesgarage.github.io/iron-monk/

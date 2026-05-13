@@ -10,4 +10,4 @@ Five pages cover everything beyond the basics. Each is scoped to one mental mode
 | **[Execution Models](execution.md)** | You hit the edges of `validate_dict` (partial, sanitization), need streaming validation, or want recursive / nested schemas. |
 | **[Settings and Type Metadata](settings.md)** | You are integrating with a framework that wraps values, uses sentinels, or expresses optionality through a custom generic. |
 
-If your question is *"what does built-in constraint X do?"*, that lives in the **[Constraints catalog](../constraints.md)** instead.
+If your question is *"what does built-in constraint X do?"*, that lives in the **[Constraints catalog](../constraints/index.md)** instead.

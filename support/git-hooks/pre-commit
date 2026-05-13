@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# iron-monk pre-commit hook.
+#
+# Regenerates docs/llms-full.txt whenever a doc page, the public package
+# surface (__init__.py), or the build script itself is staged, then auto-stages
+# the regenerated file. Keeps the LLM-facing artifact in lockstep with the
+# source-of-truth docs without manual `make llms` runs.
+#
+# Install via: make install-hooks
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Files whose changes invalidate docs/llms-full.txt. Keep aligned with
+# support/build_llms.py PAGES list.
+TRIGGER_PATTERN='^(docs/(getting_started|api_reference|benchmarks)\.md|docs/(concepts|constraints|advanced|examples)/.+\.md|src/monk/__init__\.py|support/build_llms\.py|AGENTS\.md|docs/llms\.txt|docs/llms-ctx\.txt)$'
+
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE "$TRIGGER_PATTERN"; then
+    exit 0
+fi
+
+echo "📚 doc / public-API change detected — regenerating docs/llms-full.txt"
+
+if ! command -v python >/dev/null 2>&1; then
+    echo "  python not on PATH — cannot regenerate. Stage docs/llms-full.txt manually or install python." >&2
+    exit 1
+fi
+
+python support/build_llms.py
+git add docs/llms-full.txt
+echo "  ✓ docs/llms-full.txt re-staged"
