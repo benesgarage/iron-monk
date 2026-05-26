@@ -46,8 +46,11 @@ from monk.constraints import (
     Match,
     FileSize,
     MagicBytes,
+    Ref,
+    Ctx,
 )
-from monk import monk
+from typing import Annotated
+from monk import monk, validate
 from monk.exceptions import ValidationError
 
 
@@ -937,7 +940,6 @@ def test_magic_bytes_accepts_bytearray() -> None:
 
 def test_file_size_and_magic_bytes_compose() -> None:
     """Both constraints stack on a single field via @monk dataclass."""
-    from typing import Annotated
 
     @monk(defer=False)
     class Upload:
@@ -948,3 +950,65 @@ def test_file_size_and_magic_bytes_compose() -> None:
         Upload(body=_BOGUS)
     with pytest.raises(ValidationError):
         Upload(body=_PNG_HEADER * 4)
+
+
+def test_magic_bytes_accepts_single_string_allowed() -> None:
+    c = MagicBytes(allowed="image/png")
+    c.validate(_PNG_HEADER)
+    with pytest.raises(ValueError, match="not in allowed types"):
+        c.validate(_JPEG_HEADER)
+
+
+def test_magic_bytes_constructs_with_ref_allowed() -> None:
+    # Construction must not eagerly call frozenset(Ref(...)).
+    MagicBytes(allowed=Ref("content_type"))
+    MagicBytes(allowed=Ctx("allowed_mimes"))
+
+
+def test_magic_bytes_resolves_ref_to_string_at_validation() -> None:
+    @monk
+    class Req:
+        content_type: Annotated[str, OneOf(("image/png", "image/jpeg"))]
+        body: Annotated[bytes, MagicBytes(allowed=Ref("content_type"))]
+
+    validate(Req(content_type="image/png", body=_PNG_HEADER))
+
+    bad = Req(content_type="image/png", body=_JPEG_HEADER)
+    with pytest.raises(ValidationError) as exc:
+        validate(bad)
+    assert any("not in allowed types" in msg for msg in exc.value.flatten())
+
+
+def test_magic_bytes_resolves_ref_to_iterable_at_validation() -> None:
+    @monk
+    class Req:
+        allowed_types: tuple[str, ...]
+        body: Annotated[bytes, MagicBytes(allowed=Ref("allowed_types"))]
+
+    validate(Req(allowed_types=("image/png", "image/jpeg"), body=_JPEG_HEADER))
+
+    with pytest.raises(ValidationError):
+        validate(Req(allowed_types=("image/png",), body=_JPEG_HEADER))
+
+
+def test_magic_bytes_resolves_ctx_at_validation() -> None:
+    @monk
+    class Req:
+        body: Annotated[bytes, MagicBytes(allowed=Ctx("allowed_mimes"))]
+
+    validate(Req(body=_PNG_HEADER), context={"allowed_mimes": ("image/png",)})
+    validate(Req(body=_PNG_HEADER), context={"allowed_mimes": "image/png"})
+
+    with pytest.raises(ValidationError):
+        validate(Req(body=_JPEG_HEADER), context={"allowed_mimes": ("image/png",)})
+
+
+def test_magic_bytes_concrete_path_still_uses_prebuilt_set() -> None:
+    # Backwards-compat: tuple-of-strings path keeps eager frozenset build.
+    c = MagicBytes(allowed=("image/png", "image/jpeg"))
+    assert getattr(c, "_allowed_set") == frozenset({"image/png", "image/jpeg"})
+
+
+def test_magic_bytes_rejects_non_iterable_allowed() -> None:
+    with pytest.raises(TypeError, match="expected a mime string or iterable"):
+        MagicBytes(allowed=123)  # type: ignore[arg-type]

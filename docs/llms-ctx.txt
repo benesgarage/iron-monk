@@ -175,9 +175,16 @@ from monk.constraints import FileSize, MagicBytes
 @monk
 class Upload:
     body: Annotated[bytes, MagicBytes(allowed=("image/png", "image/jpeg")), FileSize(max_size=5_000_000)]
+
+# Bind allowed mimes to a sibling field via Ref:
+@monk
+class UploadRequest:
+    content_type: Annotated[str, OneOf(("image/png", "image/jpeg"))]
+    body:         Annotated[bytes, MagicBytes(allowed=Ref("content_type"))]
 ```
 
 `MagicBytes` sniffs leading bytes — defends against `Content-Type` spoofing.
+`MagicBytes(allowed=...)` accepts a single mime, an iterable of mimes, or `Ref`/`Ctx`.
 `MimeType` (separate constraint) only validates the *string format* of a claimed mime header.
 
 ## Settings

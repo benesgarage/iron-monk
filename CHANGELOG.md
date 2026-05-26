@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0]
+
+### Changed
+- **`Email` constraint now uses the HTML5 living-standard atom regex.** Local-part accepts the full RFC 5322 atom character set (``a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-``), matching what `<input type="email">` accepts and what modern mail-handling libraries treat as valid. The domain still requires at least one `.` (so `user@localhost` remains rejected); quoted local parts and IP-literal domains stay out of scope. This is a **strictly broader** change — every string that validated before still validates; many real-world addresses that previously failed (e.g. `user+filter!tag@example.com`) now pass.
+
+### Fixed
+- **`MagicBytes(allowed=Ref(...))` / `Ctx(...)` no longer crashes at construction.** The constraint eagerly built a `frozenset(self.allowed)` in `__post_init__`, which failed with `TypeError: 'Ref' object is not iterable` when `allowed` was a deferred reference. The whitelist is now built lazily once the blueprint compiler resolves the Ref/Ctx at validation time, enabling the canonical "body's detected mime must match the declared `content_type`" pattern: `body: Annotated[bytes, MagicBytes(allowed=Ref("content_type"))]`. The resolved value may be either a single mime string (wrapped into a one-element set) or an iterable of strings. Single-string shorthand at construction (`MagicBytes(allowed="image/png")`) is also now supported.
+
 ## [0.30.0]
 
 ### Added

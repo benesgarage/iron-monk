@@ -23,7 +23,7 @@ card_number: Annotated[str, CreditCard]
 ```
 
 ## `Email`
-`Email(*, message=None, code=None)` — RFC-style structural email check.
+`Email(*, message=None, code=None)` — structural email check using the HTML5 living-standard atom regex. Local-part accepts the full RFC 5322 atom character set (``a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-``), matching the WHATWG `<input type="email">` validator. The domain must be a dotted hostname (at least one `.`), so single-label hosts like `user@localhost` are rejected. Quoted local parts and IP-literal domains (RFC 5321 §4.1.3) are intentionally out of scope; compose `AnyOf` with a custom `Match` if you need them.
 
 ```python
 email: Annotated[str, Email]

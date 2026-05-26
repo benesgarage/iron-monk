@@ -745,10 +745,19 @@ class Unique:
 
 @constraint
 class Email:
-    """Validates an email address using a standard structural regex."""
+    r"""Validates an email address using the HTML5 living-standard atom regex.
 
-    # A robust, reliable structural regex that catches the vast majority of email typos
-    _regex = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+\Z")
+    Local-part accepts the full set of unquoted characters permitted by RFC 5322
+    atoms (``a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-``), the same set used by the WHATWG
+    HTML ``<input type="email">`` validator and most modern web forms. The domain
+    must still be a dotted hostname (at least one ``.``) so single-label hosts
+    like ``user@localhost`` are rejected — match what real mail servers accept.
+    Quoted local parts and IP-literal domains (RFC 5321 §4.1.3) are
+    intentionally out of scope; if you need them, compose ``AnyOf`` with a
+    custom ``Match`` constraint.
+    """
+
+    _regex = re.compile(r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+\Z")
 
     message: str | None = None
     code: str | None = None
@@ -1914,9 +1923,7 @@ class FileSize:
 
     def validate(self, value: Any) -> None:
         if not isinstance(value, (bytes, bytearray)):
-            raise TypeError(
-                f"Type '{type(value).__name__}' cannot be validated as file size; expected bytes."
-            )
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as file size; expected bytes.")
         n = len(value)
         if self.min_size is not None and n < self.min_size:
             raise ValueError(f"File size {n} bytes is below minimum of {self.min_size} bytes.")
@@ -1929,28 +1936,28 @@ _MagicRegistry = dict[str, tuple[_MagicPattern, ...]]
 
 _DEFAULT_MAGIC_SIGNATURES: _MagicRegistry = {
     # Images
-    "image/png":    (((b"\x89PNG\r\n\x1a\n", 0),),),
-    "image/jpeg":   (((b"\xff\xd8\xff", 0),),),
-    "image/gif":    (((b"GIF87a", 0),), ((b"GIF89a", 0),)),
-    "image/webp":   (((b"RIFF", 0), (b"WEBP", 8)),),
-    "image/bmp":    (((b"BM", 0),),),
-    "image/tiff":   (((b"II*\x00", 0),), ((b"MM\x00*", 0),)),
+    "image/png": (((b"\x89PNG\r\n\x1a\n", 0),),),
+    "image/jpeg": (((b"\xff\xd8\xff", 0),),),
+    "image/gif": (((b"GIF87a", 0),), ((b"GIF89a", 0),)),
+    "image/webp": (((b"RIFF", 0), (b"WEBP", 8)),),
+    "image/bmp": (((b"BM", 0),),),
+    "image/tiff": (((b"II*\x00", 0),), ((b"MM\x00*", 0),)),
     "image/x-icon": (((b"\x00\x00\x01\x00", 0),),),
     # Documents
     "application/pdf": (((b"%PDF-", 0),),),
     "application/rtf": (((b"{\\rtf", 0),),),
     # Archives (ZIP also covers DOCX/XLSX/PPTX by design — disambiguation is out of scope)
-    "application/zip":              (((b"PK\x03\x04", 0),), ((b"PK\x05\x06", 0),), ((b"PK\x07\x08", 0),)),
-    "application/gzip":             (((b"\x1f\x8b", 0),),),
-    "application/x-tar":            (((b"ustar", 257),),),
-    "application/x-7z-compressed":  (((b"7z\xbc\xaf\x27\x1c", 0),),),
-    "application/vnd.rar":          (((b"Rar!\x1a\x07\x00", 0),), ((b"Rar!\x1a\x07\x01\x00", 0),)),
+    "application/zip": (((b"PK\x03\x04", 0),), ((b"PK\x05\x06", 0),), ((b"PK\x07\x08", 0),)),
+    "application/gzip": (((b"\x1f\x8b", 0),),),
+    "application/x-tar": (((b"ustar", 257),),),
+    "application/x-7z-compressed": (((b"7z\xbc\xaf\x27\x1c", 0),),),
+    "application/vnd.rar": (((b"Rar!\x1a\x07\x00", 0),), ((b"Rar!\x1a\x07\x01\x00", 0),)),
     # Media
-    "audio/mpeg":      (((b"ID3", 0),), ((b"\xff\xfb", 0),), ((b"\xff\xf3", 0),), ((b"\xff\xf2", 0),)),
-    "video/mp4":       (((b"ftyp", 4),),),
-    "audio/wav":       (((b"RIFF", 0), (b"WAVE", 8)),),
-    "audio/ogg":       (((b"OggS", 0),),),
-    "video/webm":      (((b"\x1aE\xdf\xa3", 0),),),
+    "audio/mpeg": (((b"ID3", 0),), ((b"\xff\xfb", 0),), ((b"\xff\xf3", 0),), ((b"\xff\xf2", 0),)),
+    "video/mp4": (((b"ftyp", 4),),),
+    "audio/wav": (((b"RIFF", 0), (b"WAVE", 8)),),
+    "audio/ogg": (((b"OggS", 0),),),
+    "video/webm": (((b"\x1aE\xdf\xa3", 0),),),
     "video/x-msvideo": (((b"RIFF", 0), (b"AVI ", 8)),),
 }
 
@@ -1961,10 +1968,7 @@ def _detect_mime(data: bytes | bytearray, registry: _MagicRegistry) -> str | Non
     n = len(mv)
     for mime, alternatives in registry.items():
         for pattern in alternatives:
-            if all(
-                n >= offset + len(sig) and bytes(mv[offset:offset + len(sig)]) == sig
-                for sig, offset in pattern
-            ):
+            if all(n >= offset + len(sig) and bytes(mv[offset : offset + len(sig)]) == sig for sig, offset in pattern):
                 return mime
     return None
 
@@ -1982,10 +1986,15 @@ class MagicBytes:
     must all match).
 
     Allowed list uses **mime strings**, e.g. ``("image/png", "image/jpeg")``.
+    A single mime string is also accepted as shorthand (e.g. ``allowed="image/png"``).
     When ``allowed=None``, any recognized format passes.
+
+    ``allowed`` also accepts ``Ref("other_field")`` / ``Ctx("key")`` markers so
+    the whitelist can be sourced from a sibling field or validation context. The
+    resolved value may be either a single mime string or an iterable of strings.
     """
 
-    allowed: tuple[str, ...] | None = None
+    allowed: Iterable[str] | str | Ref | Ctx | None = None
     extra_signatures: dict[str, _MagicPattern] | None = None
     message: str | None = None
     code: str | None = None
@@ -1999,22 +2008,40 @@ class MagicBytes:
             for mime, pattern in self.extra_signatures.items():
                 registry[mime] = (pattern,)
         object.__setattr__(self, "_registry", registry)
-        object.__setattr__(
-            self,
-            "_allowed_set",
-            frozenset(self.allowed) if self.allowed is not None else None,
-        )
+        if isinstance(self.allowed, (Ref, Ctx)) or self.allowed is None:
+            object.__setattr__(self, "_allowed_set", None)
+        else:
+            object.__setattr__(self, "_allowed_set", _coerce_allowed_mimes(self.allowed))
 
     def validate(self, value: Any) -> None:
         if not isinstance(value, (bytes, bytearray)):
-            raise TypeError(
-                f"Type '{type(value).__name__}' cannot be validated as file content; expected bytes."
-            )
+            raise TypeError(f"Type '{type(value).__name__}' cannot be validated as file content; expected bytes.")
         detected = _detect_mime(value, self._registry)
         if detected is None:
             raise ValueError("File content does not match any known file format signature.")
-        if self._allowed_set is not None and detected not in self._allowed_set:
-            allowed_str = ", ".join(sorted(self._allowed_set))
-            raise ValueError(
-                f"Detected file type '{detected}' is not in allowed types: {allowed_str}."
-            )
+        allowed_set = self._allowed_set
+        if allowed_set is None and self.allowed is not None and not isinstance(self.allowed, (Ref, Ctx)):
+            # ``allowed`` was a Ref/Ctx at decoration time; the blueprint cloner has
+            # since overwritten it with the resolved sibling/context value. Build the
+            # whitelist from that resolved value now.
+            allowed_set = _coerce_allowed_mimes(self.allowed)
+        if allowed_set is not None and detected not in allowed_set:
+            allowed_str = ", ".join(sorted(allowed_set))
+            raise ValueError(f"Detected file type '{detected}' is not in allowed types: {allowed_str}.")
+
+
+def _coerce_allowed_mimes(allowed: Any) -> frozenset[str]:
+    """Normalises a ``MagicBytes.allowed`` value into a ``frozenset[str]``.
+
+    Accepts a single mime string (wrapped into a single-element set) or any
+    iterable of mime strings. Raises ``TypeError`` for other shapes so misuse is
+    caught at construction time (or, for Ref/Ctx-sourced values, at validation
+    time) rather than producing silently empty whitelists.
+    """
+    if isinstance(allowed, str):
+        return frozenset((allowed,))
+    if isinstance(allowed, Iterable):
+        return frozenset(allowed)
+    raise TypeError(
+        f"MagicBytes(allowed=...) expected a mime string or iterable of mime strings, got '{type(allowed).__name__}'."
+    )

@@ -21,11 +21,22 @@ Built-in signatures cover:
 | Archives | `application/zip` (also matches DOCX/XLSX/PPTX), `application/gzip`, `application/x-tar`, `application/x-7z-compressed`, `application/vnd.rar` |
 | Media    | `audio/mpeg`, `video/mp4`, `audio/wav`, `audio/ogg`, `video/webm`, `video/x-msvideo` |
 
-When `allowed=None`, any recognized format passes — useful for "must be some known binary format" checks. Pass `extra_signatures={"custom/mime": ((b"\\x00...", 0),)}` to register additional formats; each entry maps a mime to an AND-pattern of `(bytes, offset)` pairs.
+When `allowed=None`, any recognized format passes — useful for "must be some known binary format" checks. A single mime string is accepted as shorthand (`allowed="image/png"` is equivalent to `allowed=("image/png",)`). Pass `extra_signatures={"custom/mime": ((b"\\x00...", 0),)}` to register additional formats; each entry maps a mime to an AND-pattern of `(bytes, offset)` pairs.
 
 ```python
 avatar: Annotated[bytes, MagicBytes(allowed=("image/png", "image/jpeg")), FileSize(max_size=2_000_000)]
 ```
+
+`allowed` also accepts [`Ref`](../concepts/validation.md#cross-field-validation-with-ref) or [`Ctx`](../concepts/validation.md#runtime-context-with-ctx) markers so the whitelist can be sourced from a sibling field or validation context. This is the canonical pattern for "the body's detected mime must match the declared `content_type`":
+
+```python
+@monk
+class UploadRequest:
+    content_type: Annotated[str, OneOf(("image/png", "image/jpeg", "image/gif"))]
+    body: Annotated[bytes, MagicBytes(allowed=Ref("content_type"))]
+```
+
+The resolved value may be either a single mime string or an iterable of mime strings.
 
 OOXML formats (DOCX, XLSX, PPTX) are matched as `application/zip` — they are ZIP archives at the byte level. Disambiguation requires parsing the ZIP central directory, which is out of scope.
 
